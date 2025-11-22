@@ -1,0 +1,72 @@
+# AI 자동매매 프로그램 - 개발 작업 목록
+
+- [x] 1단계: 아키텍처 설계 <!-- id: 0 -->
+    - [x] 고수준 아키텍처 정의 (모듈, 데이터 흐름) <!-- id: 1 -->
+    - [x] 기술 스택 및 라이브러리 정의 <!-- id: 2 -->
+    - [x] 데이터베이스 스키마 정의 (초안) <!-- id: 3 -->
+    - [x] 추가 기능 및 고려사항 점검 <!-- id: 3-1 -->
+- [/] 2단계: 상세 설계 <!-- id: 4 -->
+    - [x] **데이터 수집 및 처리 모듈** (`design_data_module.md`) <!-- id: 5 -->
+        - [x] 키움 공식 REST API (Bridge 제거), OAuth2 토큰 관리
+        - [x] 실시간(WebSocket) 및 과거(REST) 데이터 수집 구조
+        - [x] 심화: 속도 제한(Rate Limit), 데이터 결손 보정, 장 운영 시간 관리
+    - [x] **AI/전략 엔진 모듈** (`design_strategy_module.md`) <!-- id: 6 -->
+        - [x] 내장 전략: 변동성 돌파, 이평선 교차, RSI 역추세, 볼린저 밴드, AI 하이브리드
+        - [x] AI 엔진: 가격 예측, 추세 분류, 변동성 예측, RL 행동 결정
+        - [x] 정밀 백테스터: 호가 비교 체결, 수수료/슬리피지 반영, Grid Search 최적화
+        - [x] 필터링: 유동성(거래량) 부족 및 관리종목 자동 제외
+        - [x] 영속성: 매매 컨텍스트(진입 근거) DB 저장/복원
+    - [x] **실행 (트레이딩) 모듈** (`design_execution_module.md`) <!-- id: 7 -->
+        - [x] 주문 관리: 분할 매매, 미체결 자동 정정/취소
+        - [x] 리스크 관리: 예수금/손실한도 확인, 주문 횟수 제한
+        - [x] 계좌 관리: 실시간 잔고 및 수익률 동기화
+        - [x] 알림/자동화: 카카오톡 상세 리포트, 자동 로그인, 스케줄러, 왓치독
+    - [x] **사용자 인터페이스 (UI/UX)** (`design_ui_ux.md`) <!-- id: 8 -->
+        - [x] 메인 윈도우: Dock Widget 구조, 실시간 차트/호가창
+        - [x] 설정: 전략 파라미터 튜닝, 관심종목 관리, 테마(Dark/Light) 선택
+- [ ] 3단계: 구현 (Implementation) <!-- id: 9 -->
+    - [ ] **환경 설정 (Environment Setup)** <!-- id: 10 -->
+        - [ ] Python 3.10+ (64-bit) 설치 및 가상환경(venv) 구성
+        - [ ] 필수 라이브러리 설치 (`PyQt6`, `pandas`, `websockets`, `requests`, `ta-lib`, `torch`/`tensorflow`)
+        - [ ] Git 저장소 초기화 및 `.gitignore` 설정
+        - [ ] 환경변수(`.env`) 설정 (API Key, 계좌번호 등)
+    - [ ] **메인 프로그램 코어 (Core)** <!-- id: 12 -->
+        - [ ] 프로젝트 디렉토리 구조 생성 (Clean Architecture 적용)
+        - [ ] `ConfigLoader`: 설정 파일(YAML/JSON) 및 환경변수 로드
+        - [ ] `SecureStorage`: 민감 정보(비밀번호, API Key) 암호화 저장 (OS Keyring 활용)
+        - [ ] `Logger`: 모듈별 로그 설정 (파일/콘솔, 로테이션)
+        - [ ] `Database`: SQLite 스키마 생성 및 비동기 연결 (`aiosqlite`)
+        - [ ] **코어 모듈 단위 테스트**
+    - [ ] **데이터 모듈 구현 (Data Layer)** <!-- id: 13 -->
+        - [ ] `KiwoomRestClient`: 인증(OAuth2), 토큰 자동 갱신, HTTP 요청 래퍼
+        - [ ] `RateLimiter`: Token Bucket 알고리즘 적용 (초당 요청 제한 준수)
+        - [ ] `WebSocketClient`: 실시간 시세 수신, 핑퐁(Heartbeat), 자동 재연결
+        - [ ] `DataCollector`: 실시간 데이터 버퍼링 및 `Gap Filling` (결손 보정) 로직
+        - [ ] `MacroCollector`: 시장 지수, 환율 데이터 수집
+        - [ ] `IndicatorEngine`: TA-Lib 기반 보조지표 계산
+        - [ ] **데이터 모듈 단위/통합 테스트**
+    - [ ] **전략/AI 엔진 구현 (Strategy Layer)** <!-- id: 14 -->
+        - [ ] `StrategyInterface`: 추상 클래스 정의
+        - [ ] `BuiltInStrategies`: 변동성 돌파, 이평선 교차, RSI 역추세, 볼린저 밴드 구현
+        - [ ] `AIEngine`: 모델 로더, 전처리(정규화), 추론(Inference) 로직
+        - [ ] `Backtester`: Event-Driven 시뮬레이션, 호가 기반 체결, 수수료/슬리피지 반영
+        - [ ] `Optimizer`: Grid Search 파라미터 최적화
+        - [ ] `StatePersistence`: 전략 상태(진입 근거 등) DB 저장/복원
+        - [ ] **전략/백테스터 검증 테스트**
+    - [ ] **실행(트레이딩) 모듈 구현 (Execution Layer)** <!-- id: 17 -->
+        - [ ] `RiskManager`: 예수금, 손실한도, 주문횟수 제한 검사
+        - [ ] `OrderManager`: 주문 생성/전송, 미체결 감시 및 자동 정정/취소
+        - [ ] `AccountManager`: 실시간 잔고/수익률 계산 및 동기화
+        - [ ] `Notification`: 카카오톡 메시지 발송 (체결, 에러, 리포트)
+        - [ ] `Scheduler`: 장 시작/마감 자동화, 왓치독(Health Check)
+        - [ ] **주문/체결 시뮬레이션 테스트**
+    - [ ] **UI 구현 (PyQt6)** <!-- id: 15 -->
+        - [ ] `MainWindow`: 메인 레이아웃 (Dock Widget 구조)
+        - [ ] `Dashboard`: 실시간 차트(Candlestick), 호가창, 잔고/수익률 표시
+        - [ ] `StrategyConfig`: 전략 선택 및 파라미터 설정 다이얼로그
+        - [ ] `LogViewer`: 실시간 로그 및 거래 내역 테이블
+        - [ ] **UI 기능 및 연동 테스트**
+    - [ ] **통합 테스트 및 배포** <!-- id: 16 -->
+        - [ ] 모의투자 연동 전체 시나리오 테스트 (로그인 -> 수집 -> 매매 -> 청산 -> 종료)
+        - [ ] 예외 상황 테스트 (네트워크 단절, API 에러 등)
+        - [ ] 배포 패키징 (PyInstaller) 및 사용자 매뉴얼 작성

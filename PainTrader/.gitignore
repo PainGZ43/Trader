@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+
+# Environment variables
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# Database
+*.db
+*.sqlite3
+
+# Logs
+logs/
+*.log
+
+# Kiwoom API
+Kiwoom/

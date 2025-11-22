@@ -1,0 +1,13 @@
+PyQt6
+pandas
+numpy
+websockets
+requests
+aiohttp
+aiosqlite
+python-dotenv
+keyring
+cryptography
+torch
+qasync
+ta-lib
