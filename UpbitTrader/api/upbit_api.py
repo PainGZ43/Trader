@@ -4,6 +4,7 @@ Upbit API 래퍼 - 실시간 데이터 수집
 import pyupbit
 import pandas as pd
 from datetime import datetime
+import time
 from PyQt5.QtCore import QThread, pyqtSignal
 
 
@@ -13,6 +14,21 @@ class UpbitAPI:
     def __init__(self):
         self.tickers_cache = None
         self.last_update = None
+        
+        # OHLCV 데이터 캐싱
+        self.ohlcv_cache = {}  # {(ticker, interval): (df, timestamp)}
+        self.cache_ttl = {  # 간격별 캐시 유효 시간 (초)
+            'minute1': 30,
+            'minute3': 60,
+            'minute5': 120,
+            'minute10': 300,
+            'minute15': 300,
+            'minute30': 600,
+            'minute60': 1200,
+            'day': 3600,
+            'week': 7200,
+            'month': 14400,
+        }
         
     def get_all_tickers(self, fiat="KRW"):
         """모든 마켓 티커 조회"""
@@ -27,12 +43,17 @@ class UpbitAPI:
         """현재가 조회"""
         try:
             price = pyupbit.get_current_price(ticker)
+            # 0이나 None은 유효하지 않은 값
+            if price is None or price == 0:
+                return None
             return price
         except Exception as e:
-            print(f"현재가 조회 실패 ({ticker}): {e}")
+            # 에러 로그를 너무 자주 출력하지 않도록 필터링
+            if "0" not in str(e):  # 0 에러는 로그 스킵
+                print(f"현재가 조회 실패 ({ticker}): {e}")
             return None
     
-    def get_ohlcv(self, ticker, interval="minute1", count=200):
+    def get_ohlcv(self, ticker, interval="minute1", count=200, use_cache=False):
         """OHLCV 데이터 조회
         
         Args:
@@ -41,10 +62,27 @@ class UpbitAPI:
                 - minute1, minute3, minute5, minute10, minute15, minute30, minute60, minute240
                 - day, week, month
             count: 캔들 개수 (최대 200)
+            use_cache: 캐싱 사용 여부
         """
+        # 캐싱 사용 시 캐시 확인
+        if use_cache:
+            cache_key = (ticker, interval)
+            if cache_key in self.ohlcv_cache:
+                cached_df, cached_time = self.ohlcv_cache[cache_key]
+                age = time.time() - cached_time
+                ttl = self.cache_ttl.get(interval, 300)
+                
+                if age < ttl:
+                    return cached_df
+        
+        # 캐시 없거나 만료 시 API 호출
         try:
             df = pyupbit.get_ohlcv(ticker, interval=interval, count=count)
             if df is not None and not df.empty:
+                # 캐싱
+                if use_cache:
+                    cache_key = (ticker, interval)
+                    self.ohlcv_cache[cache_key] = (df, time.time())
                 return df
             return None
         except Exception as e:
@@ -94,6 +132,18 @@ class UpbitAPI:
         except Exception as e:
             print(f"호가 조회 실패 ({ticker}): {e}")
             return None
+    
+    def clear_cache(self):
+        """캐시 초기화"""
+        self.ohlcv_cache = {}
+        print("캐시 초기화 완료")
+    
+    def get_cache_stats(self):
+        """캐시 통계"""
+        return {
+            'cached_items': len(self.ohlcv_cache),
+            'cached_tickers': list(set([k[0] for k in self.ohlcv_cache.keys()]))
+        }
 
 
 class MarketDataUpdater(QThread):

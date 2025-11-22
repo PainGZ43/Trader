@@ -19,6 +19,14 @@ class HeaderBar(QWidget):
                 border-bottom: 1px solid #2b3139;
             }
         """)
+        
+        # 상태 추적 딕셔너리
+        self.statuses = {
+            'api': False,
+            'database': False,
+            'trading': False
+        }
+        
         self.init_ui()
         
     def init_ui(self):
@@ -38,8 +46,8 @@ class HeaderBar(QWidget):
         layout.addItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
         
         # 시스템 상태
-        self.status_label = QLabel("● API 연결됨")
-        self.status_label.setStyleSheet("color: #0ecb81; font-weight: bold;")
+        self.status_label = QLabel("● 시스템 준비 중")
+        self.status_label.setStyleSheet("color: #858585; font-weight: bold;")
         layout.addWidget(self.status_label)
         
         # 자동매매 토글
@@ -114,3 +122,52 @@ class HeaderBar(QWidget):
                     background-color: #3a3f47;
                 }
             """)
+    
+    def update_status(self, status_type, status_value):
+        """
+        시스템 상태 업데이트
+        
+        Args:
+            status_type (str): 상태 타입 ('api', 'database', 'trading')
+            status_value (bool): 상태 값
+        """
+        if status_type in self.statuses:
+            self.statuses[status_type] = status_value
+        
+        # 상태 메시지 생성
+        status_parts = []
+        
+        # API 상태
+        if self.statuses['api']:
+            status_parts.append("API 연결됨")
+        else:
+            status_parts.append("API 미설정")
+        
+        # DB 상태
+        if self.statuses['database']:
+            status_parts.append("DB 연결됨")
+        else:
+            status_parts.append("DB 연결 실패")
+        
+        # Trading 상태
+        if self.statuses['trading']:
+            status_parts.append("거래 중")
+        
+        # 메시지 조합
+        status_message = " | ".join(status_parts)
+        
+        # 색상 결정 (모든 핵심 시스템이 정상이면 녹색)
+        if self.statuses['api'] and self.statuses['database']:
+            if self.statuses['trading']:
+                color = "#0ecb81"  # 녹색 (거래 중)
+                status_message = "● " + status_message
+            else:
+                color = "#1fc7d4"  # 청록색 (준비 완료)
+                status_message = "● " + status_message
+        else:
+            color = "#f6465d"  # 빨간색 (문제 있음)
+            status_message = "● " + status_message
+        
+        self.status_label.setText(status_message)
+        self.status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
+
