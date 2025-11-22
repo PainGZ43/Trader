@@ -1,0 +1,21 @@
+# Upbit Auto Trader - 의존성 패키지
+# 설치: pip install -r requirements.txt
+
+# GUI 프레임워크
+PyQt5>=5.15.9
+PyQtChart>=5.15.6
+
+# 차트 및 시각화
+matplotlib>=3.7.0
+mplfinance>=0.12.9
+pyqtgraph>=0.13.0
+
+# 데이터 분석
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Upbit API
+pyupbit>=0.2.30
+
+# 유틸리티
+python-dotenv>=1.0.0

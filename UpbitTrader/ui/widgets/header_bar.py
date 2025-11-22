@@ -1,0 +1,116 @@
+"""
+헤더 바 위젯
+"""
+from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QLabel, QPushButton, 
+                             QSpacerItem, QSizePolicy)
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QFont
+
+
+class HeaderBar(QWidget):
+    """상단 헤더 바"""
+    
+    def __init__(self):
+        super().__init__()
+        self.setFixedHeight(70)
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #1e2329;
+                border-bottom: 1px solid #2b3139;
+            }
+        """)
+        self.init_ui()
+        
+    def init_ui(self):
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(20, 10, 20, 10)
+        
+        # 로고
+        logo = QLabel("🚀 Upbit Auto Trader")
+        logo_font = QFont()
+        logo_font.setPointSize(18)
+        logo_font.setBold(True)
+        logo.setFont(logo_font)
+        logo.setStyleSheet("color: #fcd535;")
+        layout.addWidget(logo)
+        
+        # 스페이서
+        layout.addItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        
+        # 시스템 상태
+        self.status_label = QLabel("● API 연결됨")
+        self.status_label.setStyleSheet("color: #0ecb81; font-weight: bold;")
+        layout.addWidget(self.status_label)
+        
+        # 자동매매 토글
+        self.trading_btn = QPushButton("자동매매: OFF")
+        self.trading_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2b3139;
+                color: #b7bdc6;
+                border: 1px solid #474d57;
+                border-radius: 4px;
+                padding: 8px 20px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #3a3f47;
+            }
+        """)
+        self.trading_btn.clicked.connect(self.toggle_trading)
+        self.trading_on = False
+        layout.addWidget(self.trading_btn)
+        
+        # 계정 정보
+        account_label = QLabel("총 자산: ₩10,000,000")
+        account_label.setStyleSheet("color: #1fc7d4; font-weight: bold; font-size: 14px;")
+        layout.addWidget(account_label)
+        
+        # 설정 버튼
+        settings_btn = QPushButton("⚙️")
+        settings_btn.setFixedSize(40, 40)
+        settings_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2b3139;
+                border-radius: 20px;
+                font-size: 18px;
+            }
+            QPushButton:hover {
+                background-color: #3a3f47;
+            }
+        """)
+        layout.addWidget(settings_btn)
+        
+    def toggle_trading(self):
+        """자동매매 토글"""
+        self.trading_on = not self.trading_on
+        if self.trading_on:
+            self.trading_btn.setText("자동매매: ON")
+            self.trading_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #0ecb81;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 8px 20px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #10d98f;
+                }
+            """)
+        else:
+            self.trading_btn.setText("자동매매: OFF")
+            self.trading_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #2b3139;
+                    color: #b7bdc6;
+                    border: 1px solid #474d57;
+                    border-radius: 4px;
+                    padding: 8px 20px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #3a3f47;
+                }
+            """)
