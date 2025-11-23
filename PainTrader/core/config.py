@@ -25,6 +25,13 @@ class ConfigLoader:
         self._config['KAKAO_REFRESH_TOKEN'] = os.getenv('KAKAO_REFRESH_TOKEN')
         self._config['LOG_LEVEL'] = os.getenv('LOG_LEVEL', 'INFO')
         self._config['DB_PATH'] = os.getenv('DB_PATH', 'trade.db')
+        
+        # API URLs
+        self._config['KIWOOM_API_URL'] = os.getenv('KIWOOM_API_URL', 'https://openapi.kiwoom.com/openapi/v1')
+        self._config['KIWOOM_WS_URL'] = os.getenv('KIWOOM_WS_URL', 'wss://openapi.kiwoom.com/websocket/v1')
+        
+        # Mock Mode
+        self._config['MOCK_MODE'] = os.getenv('MOCK_MODE', 'True').lower() == 'true'
 
     def get(self, key, default=None):
         return self._config.get(key, default)

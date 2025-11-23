@@ -4,10 +4,7 @@ from PyQt6.QtWidgets import QApplication
 from qasync import QEventLoop
 from ui.main_window import MainWindow
 from core.logger import get_logger
-from core.config import config
-
-# Install qasync if not present (it allows asyncio with PyQt)
-# pip install qasync
+from data.data_collector import data_collector
 
 def main():
     # Initialize Logger
@@ -26,6 +23,9 @@ def main():
     window.show()
 
     logger.info("Main Window Displayed")
+    
+    # Start Data Collector
+    loop.create_task(data_collector.start())
 
     # Run Event Loop
     with loop:
