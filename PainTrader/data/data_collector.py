@@ -84,10 +84,6 @@ class DataCollector:
             self.logger.debug(f"Realtime Data: {symbol} - {price}")
             await self.save_to_db(symbol, timestamp, price, data.get("volume", 0))
             
-            # Update Buffer & Save to DB
-            self.logger.debug(f"Realtime Data: {symbol} - {price}")
-            await self.save_to_db(symbol, timestamp, price, data.get("volume", 0))
-            
             # Notify Observers (UI)
             data['type'] = 'REALTIME'
             await self.notify_observers(data)
@@ -112,7 +108,7 @@ class DataCollector:
         Save market data to SQLite.
         """
         query = """
-            INSERT INTO market_data (timestamp, symbol, interval, open, high, low, close, volume)
+            INSERT OR REPLACE INTO market_data (timestamp, symbol, interval, open, high, low, close, volume)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """
         # For tick data, we might aggregate or save as is. 

@@ -96,5 +96,38 @@ async def test_key_manager():
     else:
         print("Active Key Warning: None (Valid)")
 
+    # 7. Testing Global Settings
+    print("\n[7] Testing Global Settings...")
+    # Default values
+    print(f"Default Alert Days: {key_manager.get_expiry_alert_days()}")
+    print(f"Default Auto Login: {key_manager.is_auto_login_enabled()}")
+    
+    # Update values
+    key_manager.set_expiry_alert_days(14)
+    key_manager.set_auto_login_enabled(True)
+    
+    print(f"Updated Alert Days: {key_manager.get_expiry_alert_days()}")
+    print(f"Updated Auto Login: {key_manager.is_auto_login_enabled()}")
+    
+    # Verify persistence (reload metadata)
+    key_manager.metadata = key_manager._load_metadata()
+    print(f"Persisted Alert Days: {key_manager.get_expiry_alert_days()}")
+    print(f"Persisted Auto Login: {key_manager.is_auto_login_enabled()}")
+
+    # 8. Test Expiry Format Parsing (Internal Logic Check)
+    print("\n[8] Testing Expiry Parsing Logic...")
+    # We can't easily unit test private methods without reflection or just trusting the integration test.
+    # But we can check if the Real Key expiry is formatted correctly.
+    if real_key:
+        updated_keys = key_manager.get_keys()
+        u_real = next((k for k in updated_keys if k['uuid'] == real_key['uuid']), None)
+        print(f"Real Key Expiry Format Check: {u_real['expiry_date']}")
+        if len(u_real['expiry_date']) == 10 and u_real['expiry_date'][4] == '-':
+            print("Format OK (YYYY-MM-DD)")
+        else:
+            print(f"Format WARNING: {u_real['expiry_date']}")
+
+    print("\n=== Test Complete ===")
+
 if __name__ == "__main__":
     asyncio.run(test_key_manager())

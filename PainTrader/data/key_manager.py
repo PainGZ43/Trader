@@ -29,7 +29,7 @@ class KeyManager:
                     return json.load(f)
             except Exception as e:
                 self.logger.error(f"Failed to load metadata: {e}")
-        return {"keys": [], "active_key_uuid": None}
+        return {"keys": [], "active_key_uuid": None, "expiry_alert_days": 7, "auto_login_enabled": False}
 
     def _save_metadata(self):
         try:
@@ -97,9 +97,13 @@ class KeyManager:
                             # Handle YYYYMMDDHHMMSS or YYYY-MM-DD HH:MM:SS
                             if " " in raw_expiry:
                                 result["expiry_date"] = raw_expiry.split(" ")[0]
-                            elif len(raw_expiry) >= 8:
+                            elif len(raw_expiry) == 14: # YYYYMMDDHHMMSS
+                                result["expiry_date"] = f"{raw_expiry[:4]}-{raw_expiry[4:6]}-{raw_expiry[6:8]}"
+                            elif len(raw_expiry) == 8: # YYYYMMDD
                                 result["expiry_date"] = f"{raw_expiry[:4]}-{raw_expiry[4:6]}-{raw_expiry[6:8]}"
                             else:
+                                # Fallback or unknown format
+                                self.logger.warning(f"Unknown expiry format: {raw_expiry}")
                                 result["expiry_date"] = (datetime.now() + timedelta(days=90)).strftime("%Y-%m-%d")
                             return result
                     else:
@@ -118,7 +122,9 @@ class KeyManager:
                             raw_expiry = str(json_resp.get("expires_dt", ""))
                             if " " in raw_expiry:
                                 result["expiry_date"] = raw_expiry.split(" ")[0]
-                            elif len(raw_expiry) >= 8:
+                            elif len(raw_expiry) == 14: # YYYYMMDDHHMMSS
+                                result["expiry_date"] = f"{raw_expiry[:4]}-{raw_expiry[4:6]}-{raw_expiry[6:8]}"
+                            elif len(raw_expiry) == 8: # YYYYMMDD
                                 result["expiry_date"] = f"{raw_expiry[:4]}-{raw_expiry[4:6]}-{raw_expiry[6:8]}"
                             else:
                                 result["expiry_date"] = (datetime.now() + timedelta(days=365)).strftime("%Y-%m-%d")
@@ -134,6 +140,9 @@ class KeyManager:
         """
         Check if app_key already exists.
         """
+        if not app_key: # Skip for Virtual keys with empty app_key
+            return False
+            
         for k in self.metadata["keys"]:
             uuid = k["uuid"]
             secure_json = secure_storage.get(f"API_KEY_{uuid}")
@@ -188,8 +197,8 @@ class KeyManager:
         """
         Add a new key.
         """
-        # Check duplicate
-        if await self.check_duplicate(app_key):
+        # Check duplicate (only for non-virtual)
+        if key_type != "VIRTUAL" and await self.check_duplicate(app_key):
             self.logger.warning("Duplicate App Key detected.")
             return False
 
@@ -199,6 +208,11 @@ class KeyManager:
 
         key_uuid = str(uuid.uuid4())
         
+        # For Virtual, generate dummy account number if empty
+        if key_type == "VIRTUAL" and not account_no:
+            account_no = f"VIRTUAL-{key_uuid[:8]}"
+            expiry_date = "9999-12-31" # No expiry for virtual
+        
         # Save secure part
         secure_data = json.dumps({"app_key": app_key, "secret_key": secret_key})
         secure_storage.save(f"API_KEY_{key_uuid}", secure_data)
@@ -207,7 +221,7 @@ class KeyManager:
         new_key = {
             "uuid": key_uuid,
             "owner": owner,
-            "type": key_type, # "MOCK" or "REAL"
+            "type": key_type, # "MOCK", "REAL", "VIRTUAL"
             "account_no": account_no,
             "expiry_date": expiry_date,
             "created_at": datetime.now().isoformat()
@@ -228,20 +242,41 @@ class KeyManager:
         Delete a key.
         """
         # Remove from metadata
+        initial_count = len(self.metadata["keys"])
         self.metadata["keys"] = [k for k in self.metadata["keys"] if k["uuid"] != key_uuid]
         
-        # Remove from secure storage
-        # Note: SecureStorage might not have delete, but we can overwrite or ignore.
+        if len(self.metadata["keys"]) == initial_count:
+            self.logger.warning(f"Attempted to delete non-existent key: {key_uuid}")
+            return False
+        
+        # Remove from validation cache
+        self._validation_cache.pop(key_uuid, None)
         
         # If active key was deleted, reset active
         if self.metadata["active_key_uuid"] == key_uuid:
             self.metadata["active_key_uuid"] = None
             if self.metadata["keys"]:
-                self.metadata["active_key_uuid"] = self.metadata["keys"][0]["uuid"]
+                # Set next available as active
+                new_active = self.metadata["keys"][0]["uuid"]
+                self.set_active_key(new_active)
+            else:
+                self.logger.info("All keys deleted. No active key.")
         
         self._save_metadata()
-        self.logger.info(f"Key deleted: {key_uuid}")
+        self.logger.info(f"Key deleted: {key_uuid}. Remaining keys: {len(self.metadata['keys'])}")
         return True
+
+    def update_key_owner(self, key_uuid: str, new_owner: str) -> bool:
+        """
+        Update the owner (alias) of a key.
+        """
+        target_key = next((k for k in self.metadata["keys"] if k["uuid"] == key_uuid), None)
+        if target_key:
+            target_key["owner"] = new_owner
+            self._save_metadata()
+            self.logger.info(f"Key owner updated: {key_uuid} -> {new_owner}")
+            return True
+        return False
 
     def set_active_key(self, key_uuid: str):
         """
@@ -254,7 +289,9 @@ class KeyManager:
             self._save_metadata()
             
             # Update Config MOCK_MODE
-            is_mock = (target_key["type"] == "MOCK")
+            # For VIRTUAL, we can treat it as MOCK or keep previous state. 
+            # Let's treat VIRTUAL as MOCK for safety (no real trading).
+            is_mock = (target_key["type"] in ["MOCK", "VIRTUAL"])
             self._update_config_file(is_mock)
             
             self.logger.info(f"Active key set to: {target_key['owner']} ({target_key['type']})")
@@ -361,31 +398,19 @@ class KeyManager:
                 pass
         return warnings
 
-    def check_active_key_expiration(self) -> Optional[str]:
-        """
-        Check expiration for the ACTIVE key only.
-        Returns warning message if expiring within 7 days or expired, else None.
-        """
-        uuid = self.metadata["active_key_uuid"]
-        if not uuid:
-            return None
-            
-        k = next((k for k in self.metadata["keys"] if k["uuid"] == uuid), None)
-        if not k:
-            return None
-            
-        try:
-            expiry = datetime.strptime(k["expiry_date"], "%Y-%m-%d")
-            today = datetime.now()
-            days_left = (expiry - today).days
-            
-            if 0 <= days_left <= 7:
-                return f"활성 키 [{k['owner']}] 만료 {days_left}일 전입니다 ({k['expiry_date']})"
-            elif days_left < 0:
-                return f"활성 키 [{k['owner']}]가 만료되었습니다 ({k['expiry_date']})"
-        except:
-            pass
-        return None
+    def get_expiry_alert_days(self) -> int:
+        return self.metadata.get("expiry_alert_days", 7)
+
+    def set_expiry_alert_days(self, days: int):
+        self.metadata["expiry_alert_days"] = days
+        self._save_metadata()
+
+    def is_auto_login_enabled(self) -> bool:
+        return self.metadata.get("auto_login_enabled", False)
+
+    def set_auto_login_enabled(self, enabled: bool):
+        self.metadata["auto_login_enabled"] = enabled
+        self._save_metadata()
 
     async def verify_key_by_uuid(self, uuid: str) -> bool:
         """
@@ -407,15 +432,24 @@ class KeyManager:
             app_key = keys["app_key"]
             secret_key = keys["secret_key"]
             
+            # Skip probe for VIRTUAL keys
+            if meta.get("type") == "VIRTUAL":
+                self._validation_cache[uuid] = True
+                return True
+            
             # Use probe_key_info to get details including expiry
             info = await self.probe_key_info(app_key, secret_key)
             
             if info["valid"]:
+                self.logger.info(f"Probe successful for {uuid}. Expiry: {info['expiry_date']}")
                 # Update metadata if changed
                 changed = False
                 if info["expiry_date"] and meta["expiry_date"] != info["expiry_date"]:
+                    self.logger.info(f"Updating expiry for {uuid}: {meta['expiry_date']} -> {info['expiry_date']}")
                     meta["expiry_date"] = info["expiry_date"]
                     changed = True
+                else:
+                    self.logger.info(f"Expiry unchanged for {uuid}: {meta['expiry_date']}")
                 
                 # Also update type if for some reason it mismatch (though unlikely if probed correctly)
                 if info["type"] and meta["type"] != info["type"]:
@@ -433,5 +467,33 @@ class KeyManager:
         except:
             self._validation_cache[uuid] = False
             return False
+
+    def check_active_key_expiration(self) -> Optional[str]:
+        """
+        Check expiration for the ACTIVE key only.
+        Returns warning message if expiring within configured days or expired, else None.
+        """
+        uuid = self.metadata["active_key_uuid"]
+        if not uuid:
+            return None
+            
+        k = next((k for k in self.metadata["keys"] if k["uuid"] == uuid), None)
+        if not k:
+            return None
+            
+        try:
+            expiry = datetime.strptime(k["expiry_date"], "%Y-%m-%d")
+            today = datetime.now()
+            days_left = (expiry - today).days
+            
+            alert_days = self.get_expiry_alert_days()
+            
+            if 0 <= days_left <= alert_days:
+                return f"활성 키 [{k['owner']}] 만료 {days_left}일 전입니다 ({k['expiry_date']})"
+            elif days_left < 0:
+                return f"활성 키 [{k['owner']}]가 만료되었습니다 ({k['expiry_date']})"
+        except:
+            pass
+        return None
 
 key_manager = KeyManager()

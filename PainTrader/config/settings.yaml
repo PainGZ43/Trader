@@ -1,2 +1,2 @@
-MOCK_MODE: false
-KIWOOM_API_URL: "https://api.kiwoom.com"
+MOCK_MODE: true
+KIWOOM_API_URL: "https://mockapi.kiwoom.com"

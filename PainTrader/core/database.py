@@ -22,7 +22,13 @@ class Database:
             try:
                 self.conn = await aiosqlite.connect(self.db_path)
                 self.conn.row_factory = aiosqlite.Row
-                self.logger.info(f"Connected to database: {self.db_path}")
+                
+                # Enable WAL mode for better concurrency
+                await self.conn.execute("PRAGMA busy_timeout=30000;") # 30 seconds
+                await self.conn.execute("PRAGMA journal_mode=WAL;")
+                await self.conn.execute("PRAGMA synchronous=NORMAL;") # Recommended for WAL
+                
+                self.logger.info(f"Connected to database: {self.db_path} (WAL Mode)")
                 await self._create_tables()
             except Exception as e:
                 self.logger.critical(f"Failed to connect to database: {e}")

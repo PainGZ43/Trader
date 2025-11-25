@@ -1,9 +1,11 @@
-from PyQt6.QtWidgets import QMainWindow, QDockWidget, QLabel, QStatusBar, QToolBar
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import QMainWindow, QDockWidget, QLabel, QStatusBar, QToolBar, QMessageBox
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from ui.log_viewer import LogViewer
 from ui.header_bar import HeaderBar
 from ui.dashboard import Dashboard
 from data.data_collector import data_collector
+from data.key_manager import key_manager
+from ui.key_settings_dialog import KeySettingsDialog
 
 class MainWindow(QMainWindow):
     status_received = pyqtSignal(dict)
@@ -18,11 +20,9 @@ class MainWindow(QMainWindow):
         self.init_ui()
 
     def init_ui(self):
-        # ... (existing init_ui code) ...
         # 1. Header Bar (Top)
         self.header_bar = HeaderBar()
         
-        from PyQt6.QtWidgets import QToolBar
         toolbar = QToolBar()
         toolbar.setMovable(False)
         toolbar.setFloatable(False)
@@ -33,11 +33,14 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage("System Ready")
+        
+        # 3. Menu Bar
+        self.setup_menu()
 
-        # 3. Dock Manager
+        # 4. Dock Manager
         self.setDockOptions(QMainWindow.DockOption.AllowTabbedDocks | QMainWindow.DockOption.AnimatedDocks)
 
-        # 4. Central Widget (Dashboard)
+        # 5. Central Widget (Dashboard)
         self.dashboard = Dashboard()
         self.setCentralWidget(self.dashboard)
         
@@ -46,14 +49,14 @@ class MainWindow(QMainWindow):
         # Connect DataCollector to MainWindow (for Status Bar)
         data_collector.add_observer(self.on_data_received)
 
-        # 5. Log Viewer Dock (Bottom)
+        # 6. Log Viewer Dock (Bottom)
         self.log_dock = QDockWidget("System Logs", self)
         self.log_viewer = LogViewer()
         self.log_dock.setWidget(self.log_viewer)
         self.log_dock.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.log_dock)
 
-        # 6. Control Panel Dock (Right) - Placeholder
+        # 7. Control Panel Dock (Right) - Placeholder
         self.control_dock = QDockWidget("Control Panel", self)
         self.control_label = QLabel("Strategy & Account Info")
         self.control_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -75,19 +78,45 @@ class MainWindow(QMainWindow):
             }
         """)
         
-        # Delayed initialization for Account Info & Expiration Check
-        from PyQt6.QtCore import QTimer
-        QTimer.singleShot(500, self.initialize_account_and_check_expiry)
+        # Delayed initialization for Account Info & Expiration Check (Startup)
+        QTimer.singleShot(500, lambda: self.initialize_account_and_check_expiry(startup=True))
 
-    def initialize_account_and_check_expiry(self):
+    def setup_menu(self):
+        from PyQt6.QtGui import QAction
+        menubar = self.menuBar()
+        
+        # File Menu
+        file_menu = menubar.addMenu('파일')
+        exit_action = QAction('종료', self)
+        exit_action.setShortcut('Ctrl+Q')
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+        
+        # Settings Menu
+        settings_menu = menubar.addMenu('설정')
+        
+        # API Key Management Action
+        key_action = QAction('API 키 관리', self)
+        key_action.triggered.connect(self.open_key_settings)
+        settings_menu.addAction(key_action)
+
+    def open_key_settings(self):
+        dialog = KeySettingsDialog(self)
+        dialog.exec()
+        
+        # Refresh Account Info after dialog closes (Not startup)
+        self.initialize_account_and_check_expiry(startup=False)
+
+    def initialize_account_and_check_expiry(self, startup=False):
         """
         Fetch active key info, update header, and check expiration.
         """
-        from data.key_manager import key_manager
-        from PyQt6.QtWidgets import QMessageBox
-        
+        # Check Auto-Login on Startup
+        if startup and not key_manager.is_auto_login_enabled():
+            self.header_bar.update_account_info(None)
+            return
+
         # 1. Get Active Key Info
-        # We need full info including masked account no, so we use get_keys and find active
         keys = key_manager.get_keys()
         active_key = next((k for k in keys if k["is_active"]), None)
         

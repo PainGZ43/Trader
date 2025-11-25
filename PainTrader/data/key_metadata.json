@@ -5,25 +5,19 @@
             "owner": "Test Mock",
             "type": "MOCK",
             "account_no": "81153579",
-            "expiry_date": "2025-11-24",
+            "expiry_date": "2025-11-26",
             "created_at": "2025-11-23T23:04:29.262892"
         },
         {
-            "uuid": "623d0f73-66ad-415a-b36e-d5828273afe0",
-            "owner": "모의 투자 2",
-            "type": "MOCK",
-            "account_no": "1111",
-            "expiry_date": "2025-11-24",
-            "created_at": "2025-11-23T23:30:05.526538"
-        },
-        {
-            "uuid": "8953333b-7be1-421f-bba8-c62e99b7de36",
+            "uuid": "2a049b4c-6f2f-46ff-a5cd-83b78f42f6e0",
             "owner": "Test Real",
             "type": "REAL",
             "account_no": "55480828",
-            "expiry_date": "2025-11-24",
-            "created_at": "2025-11-23T23:31:53.953309"
+            "expiry_date": "2025-11-26",
+            "created_at": "2025-11-25T00:33:15.543729"
         }
     ],
-    "active_key_uuid": "a2e4c113-94cb-44a7-8314-2ac83c7cfdb3"
+    "active_key_uuid": "a2e4c113-94cb-44a7-8314-2ac83c7cfdb3",
+    "expiry_alert_days": 14,
+    "auto_login_enabled": true
 }
