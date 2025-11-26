@@ -1,9 +1,12 @@
 import os
+import yaml
+import json
 from dotenv import load_dotenv
 
 class ConfigLoader:
     """
-    Loads configuration from environment variables (.env) and provides access to them.
+    Loads configuration from environment variables (.env), YAML, and JSON files.
+    Priority: Environment Variables > JSON > YAML > Defaults
     """
     _instance = None
 
@@ -14,24 +17,59 @@ class ConfigLoader:
         return cls._instance
 
     def _initialize(self):
-        load_dotenv()
+        # Project Root Directory
+        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        
+        # Load .env explicitly
+        env_path = os.path.join(root_dir, '.env')
+        load_dotenv(env_path)
+        
         self._config = {}
         
-        # Load essential configs
-        self._config['KIWOOM_APP_KEY'] = os.getenv('KIWOOM_APP_KEY')
-        self._config['KIWOOM_SECRET_KEY'] = os.getenv('KIWOOM_SECRET_KEY')
-        self._config['ACCOUNT_NO'] = os.getenv('ACCOUNT_NO')
-        self._config['KAKAO_ACCESS_TOKEN'] = os.getenv('KAKAO_ACCESS_TOKEN')
-        self._config['KAKAO_REFRESH_TOKEN'] = os.getenv('KAKAO_REFRESH_TOKEN')
-        self._config['LOG_LEVEL'] = os.getenv('LOG_LEVEL', 'INFO')
-        self._config['DB_PATH'] = os.getenv('DB_PATH', 'trade.db')
+        # 1. Default Values
+        self._config['LOG_LEVEL'] = 'INFO'
+        self._config['DB_PATH'] = 'trade.db'
+        self._config['KIWOOM_API_URL'] = 'https://openapi.kiwoom.com/openapi/v1'
+        self._config['KIWOOM_WS_URL'] = 'wss://openapi.kiwoom.com/websocket/v1'
+        self._config['MOCK_MODE'] = False
+
+        # 2. Load YAML (config/settings.yaml)
+        yaml_path = os.path.join(root_dir, 'config', 'settings.yaml')
+        if os.path.exists(yaml_path):
+            try:
+                with open(yaml_path, 'r', encoding='utf-8') as f:
+                    yaml_config = yaml.safe_load(f)
+                    if yaml_config:
+                        self._config.update(yaml_config)
+            except Exception as e:
+                print(f"Warning: Failed to load settings.yaml: {e}")
+
+        # 3. Load JSON (config/settings.json)
+        json_path = os.path.join(root_dir, 'config', 'settings.json')
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, 'r', encoding='utf-8') as f:
+                    json_config = json.load(f)
+                    if json_config:
+                        self._config.update(json_config)
+            except Exception as e:
+                print(f"Warning: Failed to load settings.json: {e}")
         
-        # API URLs
-        self._config['KIWOOM_API_URL'] = os.getenv('KIWOOM_API_URL', 'https://openapi.kiwoom.com/openapi/v1')
-        self._config['KIWOOM_WS_URL'] = os.getenv('KIWOOM_WS_URL', 'wss://openapi.kiwoom.com/websocket/v1')
+        # 4. Load Environment Variables (Override)
+        # List of keys to check in Env Vars
+        env_keys = [
+            'KIWOOM_APP_KEY', 'KIWOOM_SECRET_KEY', 'ACCOUNT_NO', 
+            'KAKAO_ACCESS_TOKEN', 'KAKAO_REFRESH_TOKEN', 
+            'LOG_LEVEL', 'DB_PATH', 'KIWOOM_API_URL', 'KIWOOM_WS_URL', 'MOCK_MODE'
+        ]
         
-        # Mock Mode
-        self._config['MOCK_MODE'] = os.getenv('MOCK_MODE', 'True').lower() == 'true'
+        for key in env_keys:
+            val = os.getenv(key)
+            if val is not None:
+                if key == 'MOCK_MODE':
+                    self._config[key] = val.lower() == 'true'
+                else:
+                    self._config[key] = val
 
     def get(self, key, default=None):
         return self._config.get(key, default)

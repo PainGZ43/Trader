@@ -59,6 +59,15 @@ class KiwoomRestClient:
             self.access_token = "MOCK_TOKEN"
             return self.access_token
 
+        # Check if current token is valid
+        if self.access_token and self.token_expiry:
+            now = datetime.now()
+            if isinstance(self.token_expiry, datetime):
+                if now < self.token_expiry - timedelta(minutes=1): # Buffer
+                    return self.access_token
+            # If it's not datetime (e.g. initial load or raw value), proceed to refresh or handle logic
+            # For now, let's assume we always store datetime if we want to cache.
+
         # Lazy import to avoid circular dependency if any
         from data.key_manager import key_manager
         
@@ -101,7 +110,20 @@ class KiwoomRestClient:
                     token = result.get("token") or result.get("access_token")
                     if token:
                         self.access_token = token
-                        self.token_expiry = result.get("expires_dt") or result.get("expires_in")
+                        
+                        # Handle Expiry
+                        expires_in = result.get("expires_in") # Seconds (int)
+                        expires_dt = result.get("expires_dt") # String
+                        
+                        if expires_in:
+                            self.token_expiry = datetime.now() + timedelta(seconds=int(expires_in))
+                        elif expires_dt:
+                            # Format: YYYY-MM-DD HH:MM:SS
+                            try:
+                                self.token_expiry = datetime.strptime(expires_dt, "%Y-%m-%d %H:%M:%S")
+                            except:
+                                self.token_expiry = datetime.now() + timedelta(hours=6) # Default fallback
+                        
                         self.logger.info(f"Token issued successfully. Expires: {self.token_expiry}")
                         return self.access_token
                     else:
@@ -213,7 +235,23 @@ class KiwoomRestClient:
 
     def _get_mock_response(self, endpoint, tr_id, data):
         """Helper to generate mock responses."""
-        if "stock/price" in endpoint or tr_id == "FHKST01010100" or "mrkcond" in endpoint or tr_id == "ka10004": 
+        import random
+        
+        # Market Index (KOSPI/KOSDAQ)
+        if "mrkcond" in endpoint or tr_id == "ka10004":
+            stk_cd = data.get("stk_cd", "")
+            if stk_cd == "001": # KOSPI
+                price = 2500.0 + random.uniform(-10.0, 10.0)
+                change = random.uniform(-1.5, 1.5)
+                return {"output": {"price": f"{price:.2f}", "change": f"{change:+.2f}", "volume": "500000"}}
+            elif stk_cd == "101": # KOSDAQ
+                price = 850.0 + random.uniform(-5.0, 5.0)
+                change = random.uniform(-1.0, 1.0)
+                return {"output": {"price": f"{price:.2f}", "change": f"{change:+.2f}", "volume": "200000"}}
+            else: # Normal Stock
+                return {"output": {"price": "70000", "change": "+1.0", "volume": "1000000"}}
+                
+        elif "stock/price" in endpoint or tr_id == "FHKST01010100": 
             return {"output": {"price": "70000", "change": "+1.0", "volume": "1000000"}}
         elif "order" in endpoint or tr_id == "TT80012" or tr_id == "ct80012": 
             return {"rt_cd": "0", "msg_cd": "0000", "msg1": "Order Accepted", "output": {"order_no": "123456"}}
@@ -228,6 +266,15 @@ class KiwoomRestClient:
         tr_id = "ka10004"
         data = {"stk_cd": symbol}
         return await self.request("POST", endpoint, data=data, api_id=tr_id)
+
+    async def get_market_index(self, market_code):
+        """
+        Get Market Index (KOSPI: 001, KOSDAQ: 101)
+        """
+        # Uses same endpoint as stock price in many cases, or specific index endpoint.
+        # For Kiwoom REST, we assume standard price endpoint works with index codes or specific TR.
+        # Here we reuse get_current_price logic but wrapped for clarity.
+        return await self.get_current_price(market_code)
 
     # --- Order Management ---
 

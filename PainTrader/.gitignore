@@ -23,3 +23,12 @@ logs/
 
 # Kiwoom API
 Kiwoom/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Database Temp
+*.db-shm
+*.db-wal

@@ -11,3 +11,7 @@ cryptography
 torch
 qasync
 ta-lib
+PyYAML
+pytest
+pytest-asyncio
+psutil

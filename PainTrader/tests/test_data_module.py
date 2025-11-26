@@ -251,9 +251,10 @@ class TestMacroCollector(unittest.TestCase):
             collector.rest_client = mock_rest_client
             
             # Mock Kiwoom API response for Indices
-            mock_rest_client.get_current_price = AsyncMock(side_effect=[
-                {"output": {"price": 2600.0}}, # KOSPI
-                {"output": {"price": 900.0}}   # KOSDAQ
+            # MacroCollector calls get_market_index, so we must mock that method on the client
+            mock_rest_client.get_market_index = AsyncMock(side_effect=[
+                {"output": {"price": "2,600.00"}}, # KOSPI (String with comma)
+                {"output": {"price": "900.00"}}    # KOSDAQ
             ])
             
             await collector.update_market_indices()

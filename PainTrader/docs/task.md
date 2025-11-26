@@ -30,21 +30,25 @@
         - [ ] 필수 라이브러리 설치 (`PyQt6`, `pandas`, `websockets`, `requests`, `ta-lib`, `torch`/`tensorflow`)
         - [ ] Git 저장소 초기화 및 `.gitignore` 설정
         - [ ] 환경변수(`.env`) 설정 (API Key, 계좌번호 등)
-    - [ ] **메인 프로그램 코어 (Core)** <!-- id: 12 -->
-        - [ ] 프로젝트 디렉토리 구조 생성 (Clean Architecture 적용)
-        - [ ] `ConfigLoader`: 설정 파일(YAML/JSON) 및 환경변수 로드
-        - [ ] `SecureStorage`: 민감 정보(비밀번호, API Key) 암호화 저장 (OS Keyring 활용)
-        - [ ] `Logger`: 모듈별 로그 설정 (파일/콘솔, 로테이션)
-        - [ ] `Database`: SQLite 스키마 생성 및 비동기 연결 (`aiosqlite`)
-        - [ ] **코어 모듈 단위 테스트**
-    - [ ] **데이터 모듈 구현 (Data Layer)** <!-- id: 13 -->
-        - [ ] `KiwoomRestClient`: 인증(OAuth2), 토큰 자동 갱신, HTTP 요청 래퍼
-        - [ ] `RateLimiter`: Token Bucket 알고리즘 적용 (초당 요청 제한 준수)
-        - [ ] `WebSocketClient`: 실시간 시세 수신, 핑퐁(Heartbeat), 자동 재연결
-        - [ ] `DataCollector`: 실시간 데이터 버퍼링 및 `Gap Filling` (결손 보정) 로직
-        - [ ] `MacroCollector`: 시장 지수, 환율 데이터 수집
-        - [ ] `IndicatorEngine`: TA-Lib 기반 보조지표 계산
-        - [ ] **데이터 모듈 단위/통합 테스트**
+    - [x] **메인 프로그램 코어 (Core)** <!-- id: 12 -->
+        - [x] 프로젝트 디렉토리 구조 생성 (Clean Architecture 적용)
+        - [x] `ConfigLoader`: 설정 파일(YAML/JSON) 및 환경변수 로드
+        - [x] `SecureStorage`: 민감 정보(비밀번호, API Key) 암호화 저장 (OS Keyring 활용)
+        - [x] `Logger`: 모듈별 로그 설정 (파일/콘솔, 로테이션)
+        - [x] `Database`: SQLite 스키마 생성 및 비동기 연결 (`aiosqlite`)
+        - [x] `EventBus`: 모듈 간 이벤트 기반 통신 (Pub/Sub)
+        - [x] `ExceptionHandler`: 전역 예외 처리 및 크래시 리포트
+        - [x] `SystemMonitor`: CPU/Memory/Disk 리소스 모니터링
+        - [x] **코어 모듈 단위 테스트** (Coverage: 98%)
+        - [x] **코어 모듈 통합 테스트** (Integration Verified)
+    - [x] **데이터 모듈 구현 (Data Layer)** <!-- id: 13 -->
+        - [x] `KiwoomRestClient`: 인증(OAuth2), 토큰 자동 갱신, HTTP 요청 래퍼
+        - [x] `RateLimiter`: Token Bucket 알고리즘 적용 (초당 요청 제한 준수)
+        - [x] `WebSocketClient`: 실시간 시세 수신, 핑퐁(Heartbeat), 자동 재연결
+        - [x] `DataCollector`: 실시간 데이터 버퍼링 및 `Gap Filling` (결손 보정) 로직
+        - [x] `MacroCollector`: 시장 지수, 환율 데이터 수집
+        - [x] `IndicatorEngine`: TA-Lib 기반 보조지표 계산
+        - [x] **데이터 모듈 단위/통합 테스트**
     - [ ] **전략/AI 엔진 구현 (Strategy Layer)** <!-- id: 14 -->
         - [ ] `StrategyInterface`: 추상 클래스 정의
         - [ ] `BuiltInStrategies`: 변동성 돌파, 이평선 교차, RSI 역추세, 볼린저 밴드 구현

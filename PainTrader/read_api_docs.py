@@ -7,7 +7,7 @@ try:
     xls = pd.ExcelFile(file_path)
     print(f"Sheets: {xls.sheet_names}")
     
-    keywords = ["ka10004", "주식호가", "WebSocket", "웹소켓", "Base URL", "도메인", "oauth"]
+    keywords = ["kt00001", "kt00004", "kt00007", "kt00018"]
     
     for sheet_name in xls.sheet_names:
         print(f"\n--- Sheet: {sheet_name} ---")
