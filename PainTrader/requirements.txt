@@ -15,3 +15,4 @@ PyYAML
 pytest
 pytest-asyncio
 psutil
+holidays

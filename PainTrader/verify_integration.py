@@ -1,7 +1,8 @@
 import asyncio
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
+from unittest.mock import patch, MagicMock
 
 # Force Mock Mode for Verification
 os.environ["MOCK_MODE"] = "True"
@@ -19,38 +20,70 @@ async def verify_integration():
     # 1. Initialize Components
     collector = DataCollector()
     
-    # 2. Start Collector (Connects to Mock WS, Syncs Master, Starts Monitors)
-    await collector.start()
-    
-    # 3. Subscribe to a symbol
-    test_symbol = "005930" # Samsung Electronics
-    await collector.subscribe_symbol(test_symbol)
-    
-    logger.info(f"Subscribed to {test_symbol}. Waiting for data (5 seconds)...")
-    await asyncio.sleep(5)
-    
-    # 4. Verify Database
-    logger.info("Verifying Database Content...")
-    rows = await db.fetch_all(f"SELECT count(*) FROM market_data WHERE symbol = '{test_symbol}'")
-    count = rows[0][0]
+    # Patch MarketSchedule to force Open
+    with patch.object(collector.market_schedule, 'check_market_status', return_value=True):
         
-    if count > 0:
-        logger.info(f"SUCCESS: Found {count} records for {test_symbol} in database.")
-    else:
-        logger.error(f"FAILURE: No records found for {test_symbol} in database.")
+        # 2. Start Collector
+        await collector.start()
         
-    # 5. Verify Gap Filling (Simulate by manually checking log or just trust unit test)
-    # For integration, basic data flow is key.
-    
-    # 6. Stop
-    await collector.stop()
-    
-    if count > 0:
-        print("\n[VERIFICATION RESULT] PASS: Data flow from WebSocket to DB is working.")
-        sys.exit(0)
-    else:
-        print("\n[VERIFICATION RESULT] FAIL: No data saved to DB.")
-        sys.exit(1)
+        # 3. Verify Market Code Sync
+        logger.info("Verifying Market Code Sync...")
+        rows = await db.fetch_all("SELECT count(*) FROM market_code")
+        code_count = rows[0][0]
+        if code_count > 0:
+            logger.info(f"SUCCESS: Found {code_count} market codes.")
+        else:
+            logger.error("FAILURE: No market codes found.")
+            sys.exit(1)
+
+        # 4. Subscribe & Simulate Data for Candle
+        test_symbol = "005930"
+        await collector.subscribe_symbol(test_symbol)
+        logger.info(f"Subscribed to {test_symbol}. Simulating data flow...")
+        
+        # Inject data manually to test aggregation logic without waiting 60s
+        base_time = datetime(2024, 1, 1, 10, 0, 0)
+        
+        # Tick 1: 10:00:10
+        with patch('data.data_collector.datetime') as mock_dt:
+            mock_dt.now.return_value = base_time + timedelta(seconds=10)
+            await collector.on_realtime_data({"code": test_symbol, "price": 1000, "volume": 10})
+            
+        # Tick 2: 10:00:50
+        with patch('data.data_collector.datetime') as mock_dt:
+            mock_dt.now.return_value = base_time + timedelta(seconds=50)
+            await collector.on_realtime_data({"code": test_symbol, "price": 1010, "volume": 20})
+            
+        # Tick 3: 10:01:05 (Triggers Candle Close for 10:00)
+        with patch('data.data_collector.datetime') as mock_dt:
+            mock_dt.now.return_value = base_time + timedelta(minutes=1, seconds=5)
+            await collector.on_realtime_data({"code": test_symbol, "price": 1005, "volume": 5})
+            
+        # 5. Verify Database Content
+        logger.info("Verifying Database Content...")
+        
+        # Check Ticks
+        tick_rows = await db.fetch_all(f"SELECT count(*) FROM market_data WHERE symbol='{test_symbol}' AND interval='tick'")
+        tick_count = tick_rows[0][0]
+        logger.info(f"Tick Count: {tick_count}")
+        
+        # Check 1m Candle
+        candle_rows = await db.fetch_all(f"SELECT count(*) FROM market_data WHERE symbol='{test_symbol}' AND interval='1m'")
+        candle_count = candle_rows[0][0]
+        logger.info(f"Candle Count: {candle_count}")
+        
+        # 6. Stop
+        await collector.stop()
+        
+        if tick_count >= 3 and candle_count >= 1:
+            print("\n[VERIFICATION RESULT] PASS: Core <-> Data Module Integration Successful.")
+            print(f"- Market Codes: {code_count}")
+            print(f"- Ticks Saved: {tick_count}")
+            print(f"- Candles Generated: {candle_count}")
+            sys.exit(0)
+        else:
+            print("\n[VERIFICATION RESULT] FAIL: Data missing.")
+            sys.exit(1)
 
 if __name__ == "__main__":
     try:

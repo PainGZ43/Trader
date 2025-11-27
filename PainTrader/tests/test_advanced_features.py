@@ -44,9 +44,9 @@ def test_market_schedule_open():
     """Test market open status."""
     schedule = MarketSchedule()
     
-    # Mock datetime.now() to be 10:00 AM
+    # Mock datetime.now() to be 10:00 AM on a Monday (2023-01-02)
     with patch('data.market_schedule.datetime') as mock_datetime:
-        mock_datetime.now.return_value = datetime(2023, 1, 1, 10, 0, 0)
+        mock_datetime.now.return_value = datetime(2023, 1, 2, 10, 0, 0)
         assert schedule.check_market_status() is True
         assert schedule.is_market_open is True
 
@@ -54,8 +54,9 @@ def test_market_schedule_closed_before_9():
     """Test market closed before 9:00."""
     schedule = MarketSchedule()
     
+    # Monday 8:59
     with patch('data.market_schedule.datetime') as mock_datetime:
-        mock_datetime.now.return_value = datetime(2023, 1, 1, 8, 59, 0)
+        mock_datetime.now.return_value = datetime(2023, 1, 2, 8, 59, 0)
         assert schedule.check_market_status() is False
         assert schedule.is_market_open is False
 
@@ -63,8 +64,9 @@ def test_market_schedule_closed_after_1530():
     """Test market closed after 15:30."""
     schedule = MarketSchedule()
     
+    # Monday 15:31
     with patch('data.market_schedule.datetime') as mock_datetime:
-        mock_datetime.now.return_value = datetime(2023, 1, 1, 15, 31, 0)
+        mock_datetime.now.return_value = datetime(2023, 1, 2, 15, 31, 0)
         assert schedule.check_market_status() is False
 
 # --- Data Gap Filling Tests (Re-verification) ---

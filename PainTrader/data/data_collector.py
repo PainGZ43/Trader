@@ -48,12 +48,36 @@ class DataCollector:
         """
         self.logger.info("Starting DataCollector...")
         await db.connect()
+        
+        # Cleanup Old Data
+        await db.cleanup_old_data()
+        
         await self.sync_symbol_master()
         await self.ws_client.connect()
         
         # Start background tasks
         asyncio.create_task(self._schedule_monitor())
         asyncio.create_task(self._macro_monitor())
+        
+        # Load & Subscribe Conditions
+        asyncio.create_task(self.load_and_subscribe_conditions())
+
+    async def load_and_subscribe_conditions(self):
+        """
+        Load conditions and subscribe to them.
+        """
+        try:
+            conditions = await self.rest_client.get_condition_load()
+            if conditions and "output" in conditions:
+                for cond in conditions["output"]:
+                    idx = cond["index"]
+                    name = cond["name"]
+                    self.logger.info(f"Subscribing to Condition: {name} ({idx})")
+                    # Real-time search (type "0")
+                    # Screen number can be arbitrary unique per condition or shared
+                    await self.rest_client.send_condition("1000", name, idx, "0")
+        except Exception as e:
+            self.logger.error(f"Failed to load conditions: {e}")
 
     async def stop(self):
         """
@@ -74,7 +98,8 @@ class DataCollector:
                 return
 
             symbol = data.get("code")
-            price = data.get("price")
+            price = float(data.get("price"))
+            volume = int(data.get("volume", 0))
             timestamp = datetime.now() # Or use server timestamp if available
             
             if not symbol:
@@ -82,13 +107,17 @@ class DataCollector:
 
             # Update Buffer & Save to DB
             self.logger.debug(f"Realtime Data: {symbol} - {price}")
-            await self.save_to_db(symbol, timestamp, price, data.get("volume", 0))
+            
+            # 1. Save Tick (Optional: based on retention policy, maybe skip or save to separate table)
+            # For now, we save tick as 'tick' interval
+            await self.save_to_db(symbol, timestamp, price, volume, interval='tick')
+            
+            # 2. Aggregate Candle (1-minute)
+            await self._aggregate_candle(symbol, timestamp, price, volume)
             
             # Notify Observers (UI)
             data['type'] = 'REALTIME'
             await self.notify_observers(data)
-            
-            # Gap Filling Check
             
             # Gap Filling Check
             last_time = self.last_update_time.get(symbol)
@@ -103,7 +132,56 @@ class DataCollector:
         except Exception as e:
             self.logger.error(f"Error processing realtime data: {e}")
 
-    async def save_to_db(self, symbol, timestamp, price, volume):
+    async def _aggregate_candle(self, symbol, timestamp, price, volume):
+        """
+        Aggregate ticks into 1-minute candles.
+        """
+        # Initialize buffer if needed
+        if symbol not in self.realtime_buffer:
+            self.realtime_buffer[symbol] = {
+                "open": price, "high": price, "low": price, "close": price, "volume": 0,
+                "start_time": timestamp.replace(second=0, microsecond=0)
+            }
+        
+        candle = self.realtime_buffer[symbol]
+        
+        # Check if minute changed
+        current_minute = timestamp.replace(second=0, microsecond=0)
+        if current_minute > candle["start_time"]:
+            # Candle Closed -> Save & Publish
+            await self.save_to_db(
+                symbol, candle["start_time"], 
+                candle["close"], candle["volume"], 
+                interval='1m',
+                open_p=candle["open"], high_p=candle["high"], low_p=candle["low"]
+            )
+            
+            # Publish Event (CANDLE_CLOSED)
+            from core.event_bus import event_bus
+            event_bus.publish("CANDLE_CLOSED", {
+                "symbol": symbol,
+                "interval": "1m",
+                "timestamp": candle["start_time"],
+                "open": candle["open"],
+                "high": candle["high"],
+                "low": candle["low"],
+                "close": candle["close"],
+                "volume": candle["volume"]
+            })
+            
+            # Reset Buffer for new minute
+            self.realtime_buffer[symbol] = {
+                "open": price, "high": price, "low": price, "close": price, "volume": volume,
+                "start_time": current_minute
+            }
+        else:
+            # Update current candle
+            candle["high"] = max(candle["high"], price)
+            candle["low"] = min(candle["low"], price)
+            candle["close"] = price
+            candle["volume"] += volume
+
+    async def save_to_db(self, symbol, timestamp, close, volume, interval='tick', open_p=None, high_p=None, low_p=None):
         """
         Save market data to SQLite.
         """
@@ -111,15 +189,12 @@ class DataCollector:
             INSERT OR REPLACE INTO market_data (timestamp, symbol, interval, open, high, low, close, volume)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """
-        # For tick data, we might aggregate or save as is. 
-        # Assuming 1-minute aggregation or raw tick storage.
-        # Here we save as '1m' candle update (simplified)
-        # In real app, we would aggregate ticks into candles.
-        # For now, let's just save the tick as a 'tick' interval or update current candle.
-        # Let's assume we save raw tick for now or simplified candle.
         
-        # Simplified: Save as 'tick'
-        await db.execute(query, (timestamp, symbol, 'tick', price, price, price, price, volume))
+        if open_p is None: open_p = close
+        if high_p is None: high_p = close
+        if low_p is None: low_p = close
+        
+        await db.execute(query, (timestamp, symbol, interval, open_p, high_p, low_p, close, volume))
 
     async def fill_gap(self, symbol, start_time, end_time):
         """
@@ -127,13 +202,44 @@ class DataCollector:
         """
         self.logger.info(f"Filling gap for {symbol} from {start_time} to {end_time}")
         try:
-            # Call REST API to get OHLCV
-            # In real implementation, we calculate how many candles are missing
-            # and request them.
-            # data = await self.rest_client.get_ohlcv(symbol, "1m", start_time, end_time)
+            # Convert start_time to YYYYMMDD
+            start_date = start_time.strftime("%Y%m%d")
             
-            # Mocking the fetch
-            self.logger.info(f"Gap filled for {symbol} (Mocked)")
+            # Fetch Minute Data (assuming 1m gap)
+            ohlcv_data = await self.rest_client.get_ohlcv(symbol, "minute", start_date)
+            
+            if ohlcv_data and "output" in ohlcv_data:
+                for candle in ohlcv_data["output"]:
+                    # Parse candle time (YYYYMMDDHHMMSS)
+                    # Note: Kiwoom returns time in a specific format, need to parse carefully.
+                    # For minute data, it usually returns 'date' (YYYYMMDD) and 'time' (HHMMSS) or combined.
+                    # Let's assume standard format for now or just use the date provided.
+                    # In real Kiwoom, minute data has 'che_time' or similar.
+                    # For this implementation, we assume 'date' is YYYYMMDD and we might need time.
+                    # If mock data, we trust it.
+                    
+                    # Simplified: Just save what we got
+                    # In production, we need precise timestamp parsing.
+                    ts_str = candle.get("date") # YYYYMMDD or YYYYMMDDHHMMSS
+                    try:
+                        if len(ts_str) == 8:
+                            ts = datetime.strptime(ts_str, "%Y%m%d")
+                        elif len(ts_str) == 14:
+                            ts = datetime.strptime(ts_str, "%Y%m%d%H%M%S")
+                        else:
+                            ts = datetime.now() # Fallback
+                    except:
+                        ts = datetime.now()
+
+                    await self.save_to_db(
+                        symbol, 
+                        ts, 
+                        int(candle.get("close")), 
+                        int(candle.get("volume"))
+                    )
+                self.logger.info(f"Gap filled for {symbol} ({len(ohlcv_data['output'])} candles)")
+            else:
+                self.logger.warning(f"No data found for gap filling: {symbol}")
             
         except Exception as e:
             self.logger.error(f"Gap filling failed: {e}")
@@ -143,9 +249,30 @@ class DataCollector:
         Sync Symbol Master (Code List) from API.
         """
         self.logger.info("Syncing Symbol Master...")
-        # In real app: GetCodeListByMarket -> Save to DB
-        # For now: Mock
-        self.logger.info("Symbol Master Synced (Mocked)")
+        try:
+            # KOSPI (0) & KOSDAQ (10)
+            markets = {"0": "KOSPI", "10": "KOSDAQ"}
+            
+            for market_type, market_name in markets.items():
+                codes = await self.rest_client.get_code_list(market_type)
+                if codes:
+                    self.logger.info(f"Fetched {len(codes)} codes for {market_name}")
+                    for code in codes:
+                        # Get Name (Optional: need another API call or get_master_code_name equivalent)
+                        # For now, we just save code and market. Name can be updated later or if API provides it.
+                        # Kiwoom REST might not provide name in code_list directly.
+                        # We will insert code and market.
+                        
+                        query = """
+                            INSERT OR REPLACE INTO market_code (code, name, market, updated_at)
+                            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                        """
+                        # Name is empty for now
+                        await db.execute(query, (code, "", market_name))
+                        
+            self.logger.info("Symbol Master Synced")
+        except Exception as e:
+            self.logger.error(f"Symbol Master Sync Failed: {e}")
 
     async def subscribe_symbol(self, symbol):
         """

@@ -135,3 +135,72 @@ async def test_gap_filling_trigger(data_collector):
     # But wait, asyncio.create_task(self.fill_gap(...)) calls self.fill_gap(...) immediately to get the coroutine?
     # Yes, it calls the function to get coroutine object.
     data_collector.fill_gap.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_fill_gap_execution(data_collector):
+    """Test Gap Filling execution logic."""
+    # Restore fill_gap if it was mocked in previous test (it's a fresh fixture here)
+    
+    # Mock rest_client.get_ohlcv
+    mock_ohlcv = {
+        "output": [
+            {"date": "20230101", "close": "60000", "volume": "1000"}
+        ]
+    }
+    data_collector.rest_client.get_ohlcv = AsyncMock(return_value=mock_ohlcv)
+    
+    # Mock save_to_db
+    data_collector.save_to_db = AsyncMock()
+    
+    from datetime import datetime
+    start = datetime(2023, 1, 1, 9, 0)
+    end = datetime(2023, 1, 1, 9, 10)
+    
+    await data_collector.fill_gap("005930", start, end)
+    
+    data_collector.rest_client.get_ohlcv.assert_called_once()
+    data_collector.save_to_db.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_sync_symbol_master(data_collector):
+    """Test Symbol Master Sync."""
+    # Mock get_code_list
+    data_collector.rest_client.get_code_list = AsyncMock(side_effect=[
+        ["005930"], # KOSPI
+        ["000660"]  # KOSDAQ
+    ])
+    
+    # Mock db.execute
+    # We need to access the mock_db injected in fixture
+    # In fixture: patch('data.data_collector.db')
+    # We can access it via data_collector module import if we knew where it is, 
+    # but easier to rely on the fact that data_collector.py imports db.
+    # We patched 'data.data_collector.db'.
+    
+    # Let's verify calls on the patched object.
+    # Since we can't easily access the mock object created in fixture from here without returning it,
+    # let's re-patch or assume it works if no error.
+    # Better: Update fixture to return (collector, mock_db) or just mock db.execute on the module.
+    
+    with patch('data.data_collector.db.execute', new_callable=AsyncMock) as mock_execute:
+        await data_collector.sync_symbol_master()
+        
+        assert data_collector.rest_client.get_code_list.call_count == 2
+        assert mock_execute.call_count >= 2 # At least 2 inserts
+
+@pytest.mark.asyncio
+async def test_market_schedule_business_day():
+    """Test MarketSchedule business day check."""
+    from data.market_schedule import MarketSchedule
+    schedule = MarketSchedule()
+    
+    # Mock datetime to Monday
+    with patch('data.market_schedule.datetime') as mock_dt:
+        mock_dt.now.return_value.weekday.return_value = 0 # Monday
+        assert schedule.is_business_day() is True
+        
+        mock_dt.now.return_value.weekday.return_value = 5 # Saturday
+        assert schedule.is_business_day() is False
+        
+        mock_dt.now.return_value.weekday.return_value = 6 # Sunday
+        assert schedule.is_business_day() is False

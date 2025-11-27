@@ -1,22 +1,15 @@
-import unittest
+import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
-import asyncio
 from datetime import datetime, timedelta
 from data.kiwoom_rest_client import KiwoomRestClient
 from data.websocket_client import WebSocketClient
 
-class TestAPICompliance(unittest.TestCase):
-    def setUp(self):
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
-
-    def tearDown(self):
-        self.loop.close()
-
-    @patch('data.kiwoom_rest_client.config')
-    @patch('data.kiwoom_rest_client.secure_storage')
-    @patch('aiohttp.ClientSession')
-    def test_rest_api_request_format(self, mock_session_cls, mock_storage, mock_config):
+@pytest.mark.asyncio
+async def test_rest_api_request_format():
+    with patch('data.kiwoom_rest_client.config') as mock_config, \
+         patch('data.kiwoom_rest_client.secure_storage') as mock_storage, \
+         patch('aiohttp.ClientSession') as mock_session_cls:
+         
         # Setup
         mock_config.get.side_effect = lambda k, d=None: {
             "KIWOOM_API_URL": "https://api.kiwoom.com",
@@ -37,36 +30,33 @@ class TestAPICompliance(unittest.TestCase):
         mock_session.request.return_value.__aenter__.return_value = mock_response
         
         # Execute
-        # We need to mock get_token to avoid actual call if token is missing, 
-        # but here we set access_token so it should skip.
-        
-        self.loop.run_until_complete(client.get_current_price("005930"))
+        await client.get_current_price("005930")
         
         # Verify
         # Check URL
         args, kwargs = mock_session.request.call_args
         method, url = args
-        self.assertEqual(method, "POST")
-        self.assertEqual(url, "https://api.kiwoom.com/api/dostk/mrkcond")
+        assert method == "POST"
+        assert url == "https://api.kiwoom.com/api/dostk/mrkcond"
         
         # Check Headers
         headers = kwargs['headers']
-        self.assertEqual(headers['api-id'], 'ka10004')
-        self.assertEqual(headers['appkey'], 'test_key')
-        self.assertEqual(headers['appsecret'], 'test_key')
-        self.assertIn("Bearer test_token", headers['Authorization'])
+        assert headers['api-id'] == 'ka10004'
+        assert headers['appkey'] == 'test_key'
+        assert headers['appsecret'] == 'test_key'
+        assert "Bearer test_token" in headers['Authorization']
         
         # Check Payload
         data = kwargs['json']
-        self.assertEqual(data['stk_cd'], "005930")
-        
-        print("REST API Compliance Test: PASS")
+        assert data['stk_cd'] == "005930"
 
-    @patch('data.websocket_client.config')
-    @patch('data.websocket_client.secure_storage')
-    @patch('data.kiwoom_rest_client.kiwoom_client') # Patch where it is defined, since it's imported inside method
-    @patch('websockets.connect')
-    def test_websocket_connection_format(self, mock_ws_connect, mock_kiwoom, mock_storage, mock_config):
+@pytest.mark.asyncio
+async def test_websocket_connection_format():
+    with patch('data.websocket_client.config') as mock_config, \
+         patch('data.websocket_client.secure_storage') as mock_storage, \
+         patch('data.kiwoom_rest_client.kiwoom_client') as mock_kiwoom, \
+         patch('websockets.connect') as mock_ws_connect:
+         
         # Setup
         mock_config.get.side_effect = lambda k, d=None: {
             "KIWOOM_WS_URL": "wss://api.kiwoom.com:10000/api/dostk/websocket",
@@ -80,21 +70,19 @@ class TestAPICompliance(unittest.TestCase):
         # Mock WS Connect
         mock_ws_connect.return_value = AsyncMock()
         
-        # Execute
-        self.loop.run_until_complete(client.connect())
-        
-        # Verify
-        args, kwargs = mock_ws_connect.call_args
-        url = args[0]
-        self.assertEqual(url, "wss://api.kiwoom.com:10000/api/dostk/websocket")
-        
-        # Check Headers (extra_headers)
-        headers = kwargs['extra_headers']
-        self.assertIn("Bearer test_token", headers['Authorization'])
-        self.assertEqual(headers['Content-Type'], "application/json; charset=utf-8")
-        
-        print("WebSocket Compliance Test: PASS")
-
-if __name__ == '__main__':
-    from datetime import datetime, timedelta
-    unittest.main()
+        # Mock background tasks to avoid infinite loops
+        with patch.object(client, '_listen', new_callable=AsyncMock), \
+             patch.object(client, '_monitor_connection', new_callable=AsyncMock):
+            
+            # Execute
+            await client.connect()
+            
+            # Verify
+            args, kwargs = mock_ws_connect.call_args
+            url = args[0]
+            assert url == "wss://api.kiwoom.com:10000/api/dostk/websocket"
+            
+            # Check Headers (extra_headers)
+            headers = kwargs['extra_headers']
+            assert "Bearer test_token" in headers['Authorization']
+            assert headers['Content-Type'] == "application/json;charset=UTF-8"

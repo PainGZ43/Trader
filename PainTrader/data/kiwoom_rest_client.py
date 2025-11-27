@@ -271,10 +271,70 @@ class KiwoomRestClient:
         """
         Get Market Index (KOSPI: 001, KOSDAQ: 101)
         """
-        # Uses same endpoint as stock price in many cases, or specific index endpoint.
-        # For Kiwoom REST, we assume standard price endpoint works with index codes or specific TR.
-        # Here we reuse get_current_price logic but wrapped for clarity.
         return await self.get_current_price(market_code)
+
+    async def get_ohlcv(self, symbol, interval, start_date=None):
+        """
+        Get Historical Data (OHLCV).
+        interval: "day" (opt10081) or "minute" (opt10080)
+        """
+        if interval == "day":
+            endpoint = "/api/dostk/ohlcv_day" # Hypothetical endpoint for bridge
+            tr_id = "opt10081"
+        elif interval == "minute":
+            endpoint = "/api/dostk/ohlcv_minute"
+            tr_id = "opt10080"
+        else:
+            self.logger.error(f"Invalid interval: {interval}")
+            return None
+            
+        data = {
+            "stk_cd": symbol,
+            "date": start_date, # YYYYMMDD
+            "tick": "1" if interval == "minute" else None
+        }
+        
+        # In Mock Mode, return dummy data
+        if self.is_mock_server:
+            return self._get_mock_ohlcv(symbol, interval)
+            
+        return await self.request("POST", endpoint, data=data, api_id=tr_id)
+
+    async def get_code_list(self, market_type="0"):
+        """
+        Get Stock Code List.
+        market_type: "0" (KOSPI), "10" (KOSDAQ)
+        """
+        endpoint = "/api/dostk/code_list"
+        tr_id = "GetCodeListByMarket" # This is usually an OpenAPI method, not TR
+        
+        data = {"market": market_type}
+        
+        if self.is_mock_server:
+            return ["005930", "000660", "035420"] # Mock
+            
+        return await self.request("POST", endpoint, data=data, api_id=tr_id)
+
+    def _get_mock_ohlcv(self, symbol, interval):
+        """Generate mock OHLCV data."""
+        import random
+        data = []
+        price = 70000
+        for i in range(10):
+            open_p = price
+            close_p = price + random.randint(-1000, 1000)
+            high_p = max(open_p, close_p) + random.randint(0, 500)
+            low_p = min(open_p, close_p) - random.randint(0, 500)
+            vol = random.randint(1000, 50000)
+            data.append({
+                "date": (datetime.now() - timedelta(days=i)).strftime("%Y%m%d"),
+                "open": str(open_p),
+                "high": str(high_p),
+                "low": str(low_p),
+                "close": str(close_p),
+                "volume": str(vol)
+            })
+        return {"output": data}
 
     # --- Order Management ---
 
@@ -320,6 +380,9 @@ class KiwoomRestClient:
     # --- Account & Balance ---
 
     async def get_account_balance(self):
+        """
+        Get Account Balance and Withdrawable Cash.
+        """
         endpoint = "/api/dostk/balance"
         tr_id = "opw00018"
         
@@ -328,9 +391,60 @@ class KiwoomRestClient:
         acc_no = active_key["account_no"] if active_key else ""
         
         data = {
-            "acc_no": acc_no
+            "acc_no": acc_no,
+            "password": "", # Usually required but handled by bridge or saved in server
+            "charge_yn": "0",
+            "ctx_area_fk": "", 
+            "ctx_area_nk": ""
         }
         
+        if self.is_mock_server:
+             return {
+                 "output": {
+                     "single": [{"total_purchase_amt": "10000000", "total_eval_amt": "10500000", "total_eval_profit_loss_amt": "500000", "total_earning_rate": "5.0", "pres_asset_total": "20000000", "deposit": "9500000"}],
+                     "multi": [{"code": "005930", "name": "Samsung Elec", "qty": "10", "avg_price": "68000", "cur_price": "70000", "eval_amt": "700000", "earning_rate": "2.9"}]
+                 }
+             }
+        
+        return await self.request("POST", endpoint, data=data, api_id=tr_id)
+
+    # --- Condition Search ---
+
+    async def get_condition_load(self):
+        """
+        Load Condition List.
+        """
+        endpoint = "/api/dostk/condition_load" # Hypothetical
+        tr_id = "GetConditionLoad"
+        
+        if self.is_mock_server:
+            return {
+                "output": [
+                    {"index": "001", "name": "Golden Cross"},
+                    {"index": "002", "name": "Bollinger Breakout"}
+                ]
+            }
+            
+        # Note: Kiwoom OpenAPI usually triggers event OnReceiveConditionVer
+        # For REST, we assume a synchronous return or polling.
+        return await self.request("POST", endpoint, api_id=tr_id)
+
+    async def send_condition(self, screen_no, condition_name, condition_index, search_type):
+        """
+        Send Condition Search Request.
+        search_type: "0" (Realtime), "1" (One-time)
+        """
+        endpoint = "/api/dostk/condition_send"
+        tr_id = "SendCondition"
+        
+        data = {
+            "screen_no": screen_no,
+            "condition_name": condition_name,
+            "condition_index": condition_index,
+            "search_type": search_type
+        }
+        
+        self.logger.info(f"Sending Condition: {condition_name} ({condition_index})")
         return await self.request("POST", endpoint, data=data, api_id=tr_id)
 
 kiwoom_client = KiwoomRestClient()

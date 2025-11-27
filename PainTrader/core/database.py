@@ -75,8 +75,22 @@ class Database:
             # Strategy State Persistence Table
             await self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS strategy_state (
-                    symbol TEXT PRIMARY KEY,
-                    state_json TEXT,
+                    strategy_id TEXT PRIMARY KEY,
+                    symbol TEXT,
+                    current_position INTEGER,
+                    avg_entry_price REAL,
+                    accumulated_profit REAL,
+                    indicators TEXT,
+                    last_update DATETIME
+                )
+            """)
+
+            # Market Code Master Table
+            await self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS market_code (
+                    code TEXT PRIMARY KEY,
+                    name TEXT,
+                    market TEXT,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -107,5 +121,31 @@ class Database:
         except Exception as e:
             self.logger.error(f"Query fetch failed: {query} | {e}")
             raise
+
+    async def cleanup_old_data(self, tick_retention_days=7, candle_retention_days=30):
+        """
+        Delete old market data based on retention policy.
+        """
+        if not self.conn:
+            await self.connect()
+            
+        try:
+            self.logger.info("Starting Database Cleanup...")
+            
+            # 1. Cleanup Ticks
+            query_tick = f"DELETE FROM market_data WHERE interval='tick' AND timestamp < date('now', '-{tick_retention_days} days')"
+            async with self.conn.execute(query_tick) as cursor:
+                self.logger.info(f"Deleted {cursor.rowcount} old tick records.")
+                
+            # 2. Cleanup 1m Candles
+            query_candle = f"DELETE FROM market_data WHERE interval='1m' AND timestamp < date('now', '-{candle_retention_days} days')"
+            async with self.conn.execute(query_candle) as cursor:
+                self.logger.info(f"Deleted {cursor.rowcount} old candle records.")
+                
+            await self.conn.commit()
+            self.logger.info("Database Cleanup Completed.")
+            
+        except Exception as e:
+            self.logger.error(f"Database Cleanup Failed: {e}")
 
 db = Database()

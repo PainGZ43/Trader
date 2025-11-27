@@ -110,3 +110,60 @@ async def test_request_rate_limiting(client):
         
         await client.request("GET", "/test")
         mock_acquire.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_get_ohlcv(client):
+    # Mock Response
+    mock_response = {
+        "output": [
+            {"date": "20230101", "open": "60000", "high": "61000", "low": "59000", "close": "60500", "volume": "100000"}
+        ]
+    }
+    
+    with patch.object(client, 'request', new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+        
+        result = await client.get_ohlcv("005930", "day", "20230101")
+        
+        assert result == mock_response
+        mock_request.assert_called_once()
+        args, kwargs = mock_request.call_args
+        assert args[0] == "POST"
+        assert "/api/dostk/ohlcv_day" in args[1]
+        assert kwargs['data']['stk_cd'] == "005930"
+        assert kwargs['api_id'] == "opt10081"
+
+@pytest.mark.asyncio
+async def test_get_code_list(client):
+    # Mock Response
+    mock_response = ["005930", "000660"]
+    
+    with patch.object(client, 'request', new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+        
+        result = await client.get_code_list("0")
+        
+        assert result == mock_response
+        mock_request.assert_called_once()
+        args, kwargs = mock_request.call_args
+        assert kwargs['api_id'] == "GetCodeListByMarket"
+
+@pytest.mark.asyncio
+async def test_get_account_balance(client):
+    # Mock Response
+    mock_response = {
+        "output": {
+            "single": [{"deposit": "10000000"}],
+            "multi": []
+        }
+    }
+    
+    with patch.object(client, 'request', new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+        
+        result = await client.get_account_balance()
+        
+        assert result == mock_response
+        mock_request.assert_called_once()
+        args, kwargs = mock_request.call_args
+        assert kwargs['api_id'] == "opw00018"

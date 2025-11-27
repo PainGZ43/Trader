@@ -33,16 +33,14 @@ class WebSocketClient:
         if self.mock_mode:
             self.logger.info("[MOCK] WebSocket Connected (Simulated)")
             self.is_connected = True
+            self._stop_event.clear()
             asyncio.create_task(self._mock_stream())
             return
 
         self.logger.info(f"Connecting to WebSocket: {self.ws_url}")
+        self._stop_event.clear()
         
         # Get Access Token from RestClient (assuming it's shared or we need to get it)
-        # Ideally, WebSocketClient should have access to the token.
-        # For now, let's assume we can get it via KiwoomRestClient singleton or passed in.
-        # But KiwoomRestClient is in data/kiwoom_rest_client.py.
-        # Let's import it inside method to avoid circular import if any.
         from data.kiwoom_rest_client import kiwoom_client
         token = await kiwoom_client.get_token()
         
@@ -56,7 +54,9 @@ class WebSocketClient:
             self.websocket = await websockets.connect(self.ws_url, extra_headers=headers)
             self.is_connected = True
             self.logger.info("WebSocket Connected")
+            self.last_msg_time = asyncio.get_event_loop().time()
             asyncio.create_task(self._listen())
+            asyncio.create_task(self._monitor_connection())
         except TypeError as e:
             if "unexpected keyword argument 'extra_headers'" in str(e):
                 self.logger.warning("websockets.connect failed with extra_headers. Retrying without headers...")
@@ -64,16 +64,58 @@ class WebSocketClient:
                     self.websocket = await websockets.connect(self.ws_url)
                     self.is_connected = True
                     self.logger.info("WebSocket Connected (No Headers)")
+                    self.last_msg_time = asyncio.get_event_loop().time()
                     asyncio.create_task(self._listen())
+                    asyncio.create_task(self._monitor_connection())
                 except Exception as e2:
                     self.logger.error(f"WebSocket Connection Failed (Retry): {e2}")
-                    self._switch_to_mock()
+                    await self._reconnect()
             else:
                 self.logger.error(f"WebSocket Connection Failed: {e}")
-                self._switch_to_mock()
+                await self._reconnect()
         except Exception as e:
             self.logger.error(f"WebSocket Connection Failed: {e}")
-            self._switch_to_mock()
+            await self._reconnect()
+
+    async def _reconnect(self):
+        """
+        Reconnect with exponential backoff.
+        """
+        backoff = 1
+        max_backoff = 60
+        
+        while not self._stop_event.is_set():
+            self.logger.info(f"Reconnecting in {backoff} seconds...")
+            await asyncio.sleep(backoff)
+            
+            try:
+                await self.connect()
+                if self.is_connected:
+                    self.logger.info("Reconnection Successful")
+                    # Re-subscribe if needed (logic to be added)
+                    return
+            except Exception as e:
+                self.logger.error(f"Reconnection failed: {e}")
+            
+            backoff = min(backoff * 2, max_backoff)
+
+    async def _monitor_connection(self):
+        """
+        Watchdog to detect silent disconnects.
+        """
+        while self.is_connected and not self._stop_event.is_set():
+            await asyncio.sleep(10)
+            if not self.last_msg_time:
+                continue
+                
+            elapsed = asyncio.get_event_loop().time() - self.last_msg_time
+            if elapsed > 60: # No data for 60s
+                self.logger.warning(f"No data for {elapsed:.1f}s. Triggering reconnect...")
+                self.is_connected = False
+                if self.websocket:
+                    await self.websocket.close()
+                await self._reconnect()
+                break
 
     def _switch_to_mock(self):
         self.logger.warning("Switching to MOCK MODE due to connection failure.")
@@ -110,8 +152,8 @@ class WebSocketClient:
         self._stop_event.set()
         if self.websocket:
             await self.websocket.close()
-            self.is_connected = False
-            self.logger.info("WebSocket Disconnected")
+        self.is_connected = False
+        self.logger.info("WebSocket Disconnected")
 
     async def subscribe(self, tr_id, tr_key):
         """
@@ -159,14 +201,17 @@ class WebSocketClient:
                     break
                     
                 message = await self.websocket.recv()
+                self.last_msg_time = asyncio.get_event_loop().time()
                 await self._handle_message(message)
                 
         except websockets.exceptions.ConnectionClosed:
             self.logger.warning("WebSocket Connection Closed")
             self.is_connected = False
-            # Trigger reconnect logic here
+            await self._reconnect()
         except Exception as e:
             self.logger.error(f"WebSocket Listen Error: {e}")
+            if not self._stop_event.is_set():
+                 await self._reconnect()
 
     async def _handle_message(self, message):
         """
