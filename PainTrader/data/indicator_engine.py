@@ -55,4 +55,40 @@ class IndicatorEngine:
             self.logger.error(f"Indicator calculation failed: {e}")
             return df
 
+    def get_indicator(self, df: pd.DataFrame, name: str, **kwargs) -> pd.Series:
+        """
+        Calculate and return a specific indicator series.
+        """
+        try:
+            if df.empty:
+                return pd.Series()
+
+            close = df['close'].astype(float)
+            high = df['high'].astype(float)
+            low = df['low'].astype(float)
+
+            if name == "SMA":
+                period = kwargs.get("timeperiod", 20)
+                return talib.SMA(close, timeperiod=period)
+            
+            elif name == "ADX":
+                period = kwargs.get("timeperiod", 14)
+                return talib.ADX(high, low, close, timeperiod=period)
+            
+            elif name == "ATR":
+                period = kwargs.get("timeperiod", 14)
+                return talib.ATR(high, low, close, timeperiod=period)
+            
+            elif name == "RSI":
+                period = kwargs.get("timeperiod", 14)
+                return talib.RSI(close, timeperiod=period)
+
+            else:
+                self.logger.warning(f"Unknown indicator requested: {name}")
+                return pd.Series()
+
+        except Exception as e:
+            self.logger.error(f"Error getting indicator {name}: {e}")
+            return pd.Series()
+
 indicator_engine = IndicatorEngine()

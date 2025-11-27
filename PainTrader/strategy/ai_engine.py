@@ -131,4 +131,47 @@ class AIEngine:
             self.logger.error(f"Inference failed for {model_name}: {e}")
             return 0.0
 
+    def train_model(self, model_name: str, data: pd.DataFrame, target_col: str, model_type: str = "sklearn_rf"):
+        """
+        Train a new model and save it.
+        This is a placeholder for the retraining pipeline.
+        """
+        self.logger.info(f"Starting training for {model_name} with {len(data)} rows...")
+        
+        try:
+            # 1. Feature Engineering (Reuse preprocess logic or separate)
+            # For training, we need X and y
+            if model_name in self.feature_configs:
+                features = self.feature_configs[model_name]
+                X = data[features]
+            else:
+                X = data.drop(columns=[target_col])
+                
+            y = data[target_col]
+            
+            # 2. Train
+            if model_type == "sklearn_rf":
+                if not SKLEARN_AVAILABLE:
+                    self.logger.error("Scikit-learn not available")
+                    return
+                from sklearn.ensemble import RandomForestClassifier
+                model = RandomForestClassifier()
+                model.fit(X, y)
+                
+                # 3. Save
+                save_path = f"models/{model_name}.pkl"
+                os.makedirs("models", exist_ok=True)
+                joblib.dump(model, save_path)
+                
+                # 4. Update Memory
+                self.models[model_name] = model
+                self.logger.info(f"Model trained and saved to {save_path}")
+                
+            elif model_type == "pytorch_lstm":
+                # Placeholder for PyTorch training loop
+                self.logger.info("PyTorch training not implemented yet.")
+                
+        except Exception as e:
+            self.logger.error(f"Training failed: {e}")
+
 ai_engine = AIEngine()

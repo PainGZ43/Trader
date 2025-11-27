@@ -35,31 +35,112 @@
 
 ## 3. 주요 다이얼로그 (Dialogs)
 
-### 3.1. 전략 설정 (Strategy Config)
-*   **전략 선택**: 콤보박스로 전략(변동성 돌파, AI 하이브리드 등) 선택.
-*   **종목 선정 소스 (Target Source)**:
-    *   [ ] **사용자 관심종목**: 직접 등록한 종목 리스트.
-    *   [ ] **조건검색 연동**: 키움 조건검색식 선택.
-    *   [ ] **AI 추천**: AI가 선정한 Top 10 종목 자동 편입.
-*   **필터링 옵션**:
-    *   [x] **유동성 필터**: 거래대금 100억 미만 제외.
-    *   [x] **관리종목 필터**: 거래정지/관리종목 제외.
-*   **백테스팅 (Backtest)**:
-    *   [백테스트 실행] 버튼 -> 기간 설정 및 결과 리포트 팝업.
+### 3.1. 통합 설정 (Global Settings)
+모든 설정은 하나의 통합 다이얼로그에서 탭(Tab)으로 구분하여 관리합니다.
 
-### 3.2. 환경 설정 (Global Settings)
-*   **계정 및 보안 (Account & Security)**:
-    *   **키움증권 로그인**: ID, 비밀번호, 인증서 비밀번호 (자동 로그인용, **암호화 저장**).
-    *   **API 인증**: App Key, Secret Key (**OS 보안 저장소/Keyring 사용**).
-    *   **계좌 선택**: 주식 매매에 사용할 계좌번호 선택 (복수 계좌 지원).
-*   **알림 설정 (Notification)**:
-    *   **카카오톡**: Access Token, Refresh Token 입력 (토큰 발급 가이드 링크 제공).
-    *   **알림 항목**: [x]체결, [x]에러, [x]일일 리포트.
-*   **자동화 설정 (Automation)**:
-    *   **스케줄링**: [x]자동 실행(08:30), [x]자동 종료(16:00).
-*   **테마 설정**: [Dark Mode / Light Mode] 선택 가능.
+#### [Tab 1] 일반 (General)
+*   **테마 설정**: [Dark Mode / Light Mode] 라디오 버튼.
+*   **시스템**:
+    *   [x] 윈도우 시작 시 자동 실행.
+    *   [x] 자동 로그인 (Kiwoom KOA Studio 연동).
+    *   로그 보관 기간 (일): [ 30 ] (기본값).
 
-## 4. UX/UI 디자인 원칙
+#### [Tab 2] 계정 및 API (Account & API)
+*   **키움증권 (Kiwoom)**:
+    *   ID / 비밀번호 / 인증서 비밀번호 입력 필드.
+    *   `[암호화 저장]` 버튼: 입력된 정보를 OS 보안 저장소(Keyring)에 저장하고 필드는 비움.
+    *   계좌 선택: 드롭다운으로 매매할 계좌 선택 (복수 계좌 지원).
+*   **카카오톡 (KakaoTalk)**:
+    *   REST API Key / Access Token / Refresh Token 입력.
+    *   `[토큰 발급 가이드]` 링크 제공.
+    *   `[전송 테스트]` 버튼: "테스트 메시지" 발송하여 연결 확인.
+
+#### [Tab 3] 전략 및 타겟 (Strategy & Target)
+*   **전략 선택**:
+    *   **Active Strategy**: [ 변동성 돌파 전략 (VBS) ▼ ]
+    *   **설명**: 선택된 전략에 대한 간단한 설명 표시.
+*   **파라미터 튜닝 (Parameters)**:
+    *   선택된 전략에 따라 동적으로 변하는 테이블 (Key-Value).
+    *   예: `k` (0.5), `moving_average` (20), `profit_target` (5.0%).
+*   **타겟 소스 (Target Source)**:
+    *   [ ] **관심종목**: 사용자 정의 리스트 (종목코드 직접 입력).
+    *   [ ] **조건검색**: 키움 조건검색식 목록 불러오기 -> [ 골든크로스 포착 ▼ ].
+    *   [ ] **AI 추천**: AI 모델이 선정한 Top N 종목 자동 편입.
+
+#### [Tab 4] 리스크 관리 (Risk Management)
+*   **자금 관리**:
+    *   종목당 최대 투자금: [ 1,000,000 ] 원.
+    *   최대 보유 종목 수: [ 5 ] 개.
+*   **손실 제한 (Stop Loss)**:
+    *   [x] **일일 손실 한도**: 자산의 [ 3.0 ] % 도달 시 매매 중단.
+    *   [x] **개별 종목 손절선**: 진입가 대비 [ -2.0 ] %.
+*   **블랙리스트**:
+    *   매매 제외 종목 코드/명 입력 및 관리.
+
+#### [Tab 5] 알림 (Notification)
+*   **채널**: [x] 카카오톡, [ ] 텔레그램 (추후 지원).
+*   **이벤트별 설정**:
+    *   [x] 매수/매도 체결 알림.
+    *   [x] 시스템 에러/경고 알림.
+    *   [x] 일일 리포트 (장 마감 후).
+    *   [ ] 전략 신호 발생 (매매 전) 알림.
+
+## 4. UI 배치 계획 (Layout Strategy)
+사용자 편의성과 직관성을 최우선으로 고려하여, 시선의 흐름(Monitoring -> Decision -> Action)에 최적화된 레이아웃을 설계합니다. 불필요한 장식을 배제하고 정보 전달에 집중하는 **Minimalist & Professional** 디자인을 적용합니다.
+
+### 4.1. 전체 레이아웃 (Wireframe)
+```text
++-----------------------------------------------------------------------+
+| [A] Header Bar: Logo | Status(API/DB) | Macro(KOSPI/USD) | Global Btn |
++-----------------------------------------------------------------------+
+| [B] Left Panel    | [C] Center Panel (Main)       | [D] Right Panel   |
+| (Strategy/Asset)  | (Chart & Analysis)            | (Execution)       |
+|                   |                               |                   |
+| 1. Strategy Status| 1. Real-time Chart (Candle)   | 1. Order Book     |
+| - Active Strategy | - Buy/Sell Markers            | (10 Levels)       |
+| - AI Score        | - Technical Indicators        |                   |
+| - Market Regime   |                               |                   |
+|                   |                               | 2. Manual Order   |
+| 2. Account Summary|                               | - Buy/Sell Tabs   |
+| - Total Asset     |                               | - Price/Qty Input |
+| - Daily PnL       |                               |                   |
+|                   |                               |                   |
+| 3. Portfolio      |                               | 3. Panic Button   |
+| - Symbol | PnL %  |                               | [STOP TRADING]    |
+| - Symbol | PnL %  |                               |                   |
++-------------------+-------------------------------+-------------------+
+| [E] Bottom Panel: Log Viewer | Trade History | System Warning         |
++-----------------------------------------------------------------------+
+```
+
+### 4.2. 영역별 상세 설계 (Zone Details)
+
+#### [A] Header Bar (높이 40px 고정)
+*   **좌측**: 로고 및 프로그램 타이틀.
+*   **중앙**: 핵심 매크로 지표 (코스피, 코스닥, 환율) - 실시간 등락 색상 표시.
+*   **우측**:
+    *   **상태 아이콘**: API 연결(초록점), DB 연결, 소켓 상태.
+    *   **글로벌 버튼**: `[▶ 시작]`, `[⏹ 정지]`, `[⚙ 설정]`.
+
+#### [B] Left Panel (너비 280px 고정) - "현황 파악"
+*   **Strategy Status**: 현재 구동 중인 전략과 AI의 판단(점수), 시장 국면(상승/하락)을 한눈에 표시.
+*   **Account Summary**: 예수금과 당일 손익을 큼직한 폰트로 강조.
+*   **Portfolio Table**: 보유 종목의 핵심 정보(종목명, 수익률)만 간결하게 표시. 클릭 시 차트([C]) 연동.
+
+#### [C] Center Panel (가변 너비) - "심층 분석"
+*   **Main Chart**: 화면의 가장 큰 영역 차지. 탭(Tab) 구조로 확장 가능 (차트 / 백테스트 결과 / 수급 분석).
+*   **Interaction**: 마우스 휠 줌/팬, 십자선(Crosshair) 조회.
+
+#### [D] Right Panel (너비 260px 고정) - "즉각 대응"
+*   **Order Book**: 매수/매도 10호가. 호가 등락에 따른 배경색 점멸(Flash) 효과.
+*   **Manual Order**: 자동매매 중 개입이 필요할 때 빠르게 주문을 낼 수 있는 간소화된 주문창.
+*   **Panic Button**: 최하단에 붉은색으로 배치. 오작동 시 즉시 모든 주문 취소 및 청산.
+
+#### [E] Bottom Panel (높이 150px, 접기 가능) - "이력 관리"
+*   **Log Viewer**: 시스템 로그. 중요도(INFO/ERROR)에 따른 색상 구분.
+*   **System Warning**: CPU/메모리 과부하 등 시스템 경고 메시지 별도 탭 분리.
+
+## 5. UX/UI 디자인 원칙
 *   **테마 지원 (Theme Support)**: 사용자의 선호에 따라 **Dark Mode** (기본값)와 **Light Mode**를 전환할 수 있도록 스타일시트(QSS) 분리 적용.
 *   **반응형 (Responsive)**: 창 크기 조절 시 차트와 테이블이 비율에 맞춰 자동 리사이징.
 *   **즉각적 피드백**: 버튼 클릭 시 클릭 효과, 주문 전송 시 상태바 메시지 표시.

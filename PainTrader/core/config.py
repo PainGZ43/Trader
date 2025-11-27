@@ -59,7 +59,7 @@ class ConfigLoader:
         # List of keys to check in Env Vars
         env_keys = [
             'KIWOOM_APP_KEY', 'KIWOOM_SECRET_KEY', 'ACCOUNT_NO', 
-            'KAKAO_ACCESS_TOKEN', 'KAKAO_REFRESH_TOKEN', 
+            'KAKAO_APP_KEY', 'KAKAO_ACCESS_TOKEN', 'KAKAO_REFRESH_TOKEN', 
             'LOG_LEVEL', 'DB_PATH', 'KIWOOM_API_URL', 'KIWOOM_WS_URL', 'MOCK_MODE'
         ]
         

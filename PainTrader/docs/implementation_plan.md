@@ -6,11 +6,27 @@
     *   **알림 (Notifier) - 카카오톡 중심**:
         *   **메인 채널**: **카카오톡 (KakaoTalk)**.
         *   **알림 유형**: 매매 체결, 에러, 일일 리포트, AI 신호, 조건검색 포착.
+    *   **트레이더 (Trader)**: 미체결 주문 감시, 정정/취소 주문, 잔고 편입 확인.
+    *   **알림 (Notifier) - 카카오톡 중심**:
+        *   **메인 채널**: **카카오톡 (KakaoTalk)**.
+        *   **알림 유형**: 매매 체결, 에러, 일일 리포트, AI 신호, 조건검색 포착.
+    *   **트레이더 (Trader)**: 미체결 주문 감시, 정정/취소 주문, 잔고 편입 확인.
+    *   **알림 (Notifier) - 카카오톡 중심**:
+        *   **메인 채널**: **카카오톡 (KakaoTalk)**.
+        *   **알림 유형**: 매매 체결, 에러, 일일 리포트, AI 신호, 조건검색 포착.
 
-5.  **사용자 인터페이스 (제어)**
-    *   **대시보드**: 실시간 차트, 계좌 잔고(예수금, 총매입), 보유 종목 현황.
-    *   **설정**: 전략 및 리스크 관리 파라미터 구성, 자동 로그인 설정.
-    *   **로그**: 시스템 상태 및 거래 실행 로그.
+
+### Dialogs
+#### [NEW] [ui/settings_dialog.py](file:///e:/GitHub/Trader/PainTrader/ui/settings_dialog.py)
+- **Tabs**: General, Account (API Keys), Strategy (Params), Risk (Limits), Notification.
+- **Condition Search**: List of loaded conditions with checkboxes to enable/disable.
+- **Optimization**: Grid search setup (Min/Max/Step) and results table with "Apply" button.
+- **Security**: Uses `SecureStorage` for API keys.
+
+#### [NEW] [ui/log_viewer.py](file:///e:/GitHub/Trader/PainTrader/ui/log_viewer.py)
+- **`LogTable`**: Filterable table for system logs.
+- **`SystemHealth`**: Dedicated tab/view for `SYSTEM_WARNING` events and resource usage history.
+- **`TradeHistory`**: List of executed trades.
 
 ## Proposed Changes
 *   **데이터베이스**: SQLite.

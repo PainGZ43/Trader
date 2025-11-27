@@ -79,6 +79,20 @@ class DataCollector:
         except Exception as e:
             self.logger.error(f"Failed to load conditions: {e}")
 
+    async def get_condition_list(self):
+        """
+        Get list of available conditions.
+        Returns: List of dicts [{'index': '001', 'name': 'Golden Cross'}, ...]
+        """
+        try:
+            conditions = await self.rest_client.get_condition_load()
+            if conditions and "output" in conditions:
+                return conditions["output"]
+            return []
+        except Exception as e:
+            self.logger.error(f"Failed to get condition list: {e}")
+            return []
+
     async def stop(self):
         """
         Stop data collection services.

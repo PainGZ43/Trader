@@ -94,6 +94,16 @@ class Database:
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+
+            # Paper Trading Account Table
+            await self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS paper_account (
+                    account_id TEXT PRIMARY KEY,
+                    deposit REAL,
+                    positions_json TEXT,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
             
             await self.conn.commit()
             self.logger.info("Database tables initialized")
