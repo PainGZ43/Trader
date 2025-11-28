@@ -447,4 +447,20 @@ class KiwoomRestClient:
         self.logger.info(f"Sending Condition: {condition_name} ({condition_index})")
         return await self.request("POST", endpoint, data=data, api_id=tr_id)
 
+    async def stop_condition(self, screen_no, condition_name, condition_index):
+        """
+        Stop Condition Search Request.
+        """
+        endpoint = "/api/dostk/condition_stop"
+        tr_id = "StopCondition"
+        
+        data = {
+            "screen_no": screen_no,
+            "condition_name": condition_name,
+            "condition_index": condition_index
+        }
+        
+        self.logger.info(f"Stopping Condition: {condition_name} ({condition_index})")
+        return await self.request("POST", endpoint, data=data, api_id=tr_id)
+
 kiwoom_client = KiwoomRestClient()

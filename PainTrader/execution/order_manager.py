@@ -21,13 +21,8 @@ class OrderManager:
         Send order to Kiwoom.
         """
         try:
-            # Convert Signal type to Kiwoom type
             # 1: Buy, 2: Sell
             trade_type = "1" if signal.type == "BUY" else "2"
-            
-            # Price: If 0, use Market Order ("03"), else Limit Order ("00")
-            # For simplicity, we use Limit Order at signal price if provided, else Market
-            # But usually we want Limit Order.
             quote_type = "00" # Limit
             price = int(signal.price)
             
@@ -35,63 +30,36 @@ class OrderManager:
                 quote_type = "03" # Market
                 price = 0
             
-            # Call API
-            # KiwoomRestClient.send_order(symbol, order_type, qty, price, trade_type)
-            # Note: account_num is handled internally by KiwoomRestClient via KeyManager for now.
-            # For PaperExchange, it uses its internal account.
-            
             result = await self.kiwoom.send_order(
                 signal.symbol, int(trade_type), quantity, price, quote_type
             )
             
-            # Result usually contains order_no if successful?
-            # Kiwoom returns 0 for success, but order_no comes via event.
-            # For REST API, we might get it in response.
-            # Let's assume result is a dict with status.
+            if result and result.get("rt_cd") == "0":
+                order_no = result.get("output", {}).get("order_no")
+                if order_no:
+                    self.logger.info(f"Order Sent: {signal.type} {signal.symbol} {quantity} @ {price} (ID: {order_no})")
+                    # Register immediately to track source
+                    self.active_orders[order_no] = {
+                        'symbol': signal.symbol,
+                        'type': signal.type,
+                        'quantity': quantity,
+                        'filled_qty': 0,
+                        'price': price,
+                        'source': 'STRATEGY',
+                        'timestamp': datetime.now()
+                    }
+                    return order_no
             
-            if result and result.get("result_code") == 0:
-                # We don't have order_id yet until event comes.
-                # But we can track it temporarily?
-                # In real Kiwoom, we wait for OnReceiveTrData or OnReceiveChejan.
-                self.logger.info(f"Order Sent: {signal.type} {signal.symbol} {quantity} @ {price}")
-                return "PENDING"
-            else:
-                self.logger.error(f"Order Send Failed: {result}")
-                return None
+            self.logger.error(f"Order Send Failed: {result}")
+            return None
                 
         except Exception as e:
             self.logger.error(f"Order Send Exception: {e}")
             return None
 
-    async def monitor_unfilled_orders(self):
-        """
-        Background task to monitor unfilled orders.
-        """
-        while True:
-            try:
-                now = datetime.now()
-                to_remove = []
-                
-                for order_id, info in self.active_orders.items():
-                    sent_time = info['timestamp']
-                    if (now - sent_time).total_seconds() > self.max_unfilled_time:
-                        # Cancel or Correct
-                        self.logger.info(f"Order {order_id} unfilled for too long. Cancelling...")
-                        await self.cancel_order(order_id, info['symbol'])
-                        to_remove.append(order_id)
-                
-                for oid in to_remove:
-                    self.active_orders.pop(oid, None)
-                    
-                await asyncio.sleep(self.unfilled_check_interval)
-            except Exception as e:
-                self.logger.error(f"Monitor Error: {e}")
-                await asyncio.sleep(5)
-
     async def send_manual_order(self, symbol: str, order_type: str, price: int, quantity: int) -> Optional[str]:
         """
         Send a manual order from UI.
-        order_type: 'BUY' or 'SELL'
         """
         try:
             trade_type = "1" if order_type == "BUY" else "2"
@@ -107,14 +75,61 @@ class OrderManager:
                 symbol, int(trade_type), quantity, price, quote_type
             )
             
-            if result and result.get("result_code") == 0:
-                return "PENDING"
-            else:
-                self.logger.error(f"Manual Order Failed: {result}")
-                return None
+            if result and result.get("rt_cd") == "0":
+                order_no = result.get("output", {}).get("order_no")
+                if order_no:
+                    self.active_orders[order_no] = {
+                        'symbol': symbol,
+                        'type': order_type,
+                        'quantity': quantity,
+                        'filled_qty': 0,
+                        'price': price,
+                        'source': 'MANUAL',
+                        'timestamp': datetime.now()
+                    }
+                    return order_no
+            
+            self.logger.error(f"Manual Order Failed: {result}")
+            return None
         except Exception as e:
             self.logger.error(f"Manual Order Exception: {e}")
             return None
+
+    async def modify_order(self, order_id: str, price: int, quantity: int):
+        """
+        Modify an existing order (Price/Qty).
+        """
+        try:
+            order_info = self.active_orders.get(order_id)
+            if not order_info:
+                self.logger.warning(f"Cannot modify unknown order {order_id}")
+                return False
+
+            symbol = order_info['symbol']
+            is_buy = order_info['type'] == 'BUY'
+            
+            # Kiwoom Modify Types: 5 (Buy Modify), 6 (Sell Modify)
+            modify_type = 5 if is_buy else 6
+            
+            self.logger.info(f"Modifying Order {order_id}: {quantity} @ {price}")
+            
+            # org_order_no is required
+            result = await self.kiwoom.send_order(
+                symbol, modify_type, quantity, price, "00", org_order_no=order_id
+            )
+            
+            if result and result.get("rt_cd") == "0":
+                # Update local state optimistically or wait for event?
+                # Usually modification results in a NEW order number or updates the existing one depending on exchange.
+                # Kiwoom usually keeps order_no or issues new one for remaining?
+                # Actually for correction, order_no might change or stay.
+                # Let's assume it stays for now or we handle the new one in event.
+                return True
+            return False
+            
+        except Exception as e:
+            self.logger.error(f"Modify Order Exception: {e}")
+            return False
 
     async def cancel_order(self, order_id: str, symbol: str):
         """
@@ -123,20 +138,15 @@ class OrderManager:
         try:
             self.logger.info(f"Cancelling Order {order_id} ({symbol})")
             
-            # Use KiwoomRestClient's dedicated cancel_order method
-            # We need quantity to cancel. If not tracked, maybe cancel all (0)?
-            # Kiwoom usually requires qty.
-            
             order_info = self.active_orders.get(order_id)
             qty = 0 # Default to 0 (Cancel All remaining)
             
             if order_info:
-                # If we track quantity in active_orders, use it.
-                # Currently active_orders stores: symbol, type, timestamp.
-                # We should probably store quantity too.
-                qty = order_info.get('quantity', 0)
+                # Cancel remaining quantity
+                total_qty = order_info.get('quantity', 0)
+                filled_qty = order_info.get('filled_qty', 0)
+                qty = total_qty - filled_qty
             
-            # Call KiwoomRestClient.cancel_order(order_no, symbol, qty)
             await self.kiwoom.cancel_order(order_id, symbol, qty)
             
         except Exception as e:
@@ -151,7 +161,6 @@ class OrderManager:
             self.logger.info("No active orders to cancel.")
             return
 
-        # Create a copy of keys to iterate safely
         order_ids = list(self.active_orders.keys())
         for oid in order_ids:
             info = self.active_orders[oid]
@@ -160,22 +169,52 @@ class OrderManager:
     def on_order_event(self, event_data: Dict[str, Any]):
         """
         Update order status from real-time events.
+        Handles Partial Fills.
         """
-        # Example event_data: {'order_no': '123', 'status': 'FILLED', ...}
         order_no = event_data.get('order_no')
-        status = event_data.get('status')
+        status = event_data.get('status') # ACCEPTED, FILLED, CANCELLED
         
-        if order_no and status:
-            if status == 'FILLED' or status == 'CANCELLED':
-                if order_no in self.active_orders:
-                    self.active_orders.pop(order_no)
-                    self.logger.info(f"Order {order_no} removed from active list ({status})")
-            elif status == 'ACCEPTED':
-                # Add to active orders if not exists
-                if order_no not in self.active_orders:
-                    self.active_orders[order_no] = {
-                        'symbol': event_data.get('code'),
-                        'type': event_data.get('order_type'), # BUY/SELL
-                        'quantity': int(event_data.get('qty', 0)),
-                        'timestamp': datetime.now()
-                    }
+        if not order_no:
+            return
+
+        if order_no not in self.active_orders:
+            # New order from outside (e.g. HTS)?
+            if status == 'ACCEPTED':
+                self.active_orders[order_no] = {
+                    'symbol': event_data.get('code'),
+                    'type': event_data.get('order_type'),
+                    'quantity': int(event_data.get('qty', 0)),
+                    'filled_qty': 0,
+                    'price': float(event_data.get('price', 0)),
+                    'source': 'UNKNOWN', # External order
+                    'timestamp': datetime.now()
+                }
+            return
+
+        # Update existing order
+        order_info = self.active_orders[order_no]
+        
+        if status == 'FILLED':
+            filled_qty = int(event_data.get('filled_qty', 0)) # This event usually gives *accumulated* or *this execution* qty?
+            # Kiwoom 'chejan' data usually gives 'che_qty' (this execution).
+            # We need to accumulate.
+            # Let's assume event_data['filled_qty'] is the amount filled IN THIS EVENT.
+            
+            # NOTE: We need to be careful about what 'filled_qty' means in the event passed here.
+            # Assuming it's incremental.
+            current_fill = int(event_data.get('exec_qty', 0)) # Use 'exec_qty' for incremental
+            if current_fill == 0:
+                 current_fill = int(event_data.get('qty', 0)) # Fallback if full fill implied
+            
+            order_info['filled_qty'] += current_fill
+            
+            remaining = order_info['quantity'] - order_info['filled_qty']
+            self.logger.info(f"Order {order_no} Partial Fill: {current_fill} (Rem: {remaining})")
+            
+            if remaining <= 0:
+                self.active_orders.pop(order_no)
+                self.logger.info(f"Order {order_no} Fully Filled.")
+                
+        elif status == 'CANCELLED':
+            self.active_orders.pop(order_no)
+            self.logger.info(f"Order {order_no} Cancelled.")

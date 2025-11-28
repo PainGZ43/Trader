@@ -70,6 +70,20 @@
         - [x] `ExecutionEngine`: 전략 신호 수신 및 주문 실행, 동기화 로직
         - [x] `ExecutionEngine`: 전략 신호 수신 및 주문 실행, 동기화 로직
         - [x] `AccountManager`: 실시간 잔고/수익률 계산 및 동기화
+        - [x] `Notification`: 카카오톡 메시지 발송 (체결, 에러, 리포트)
+        - [x] `Scheduler`: 장 시작/마감 자동화, 왓치독(Health Check)
+        - [x] **실행 모듈 단위 테스트**
+    - [ ] **UI 연동을 위한 백엔드 보강 (Backend Refinement)** <!-- id: 15-pre -->
+        - [ ] `OrderManager`: 수동 주문(`send_manual_order`) 및 일괄 취소(`cancel_all_orders`) 구현
+        - [ ] `ExecutionEngine`: 긴급 정지(`stop_trading`) 및 상태 노출 메서드 구현
+        - [ ] `MarketRegimeDetector`: 시장 국면 탐지 로직 구현 및 `Strategy` 연동
+        - [ ] `DataCollector`: 조건검색식 목록 조회 및 선택 API 구현
+    - [ ] **UI 구현 (PyQt6)** <!-- id: 15 -->
+        - [ ] **Phase 1: 기본 구조 및 레이아웃 (Foundation)**
+            - [ ] `MainWindow`: Dock Widget 레이아웃, 헤더바(상태/매크로/제어) 구현
+            - [ ] `Styles`: Dark Mode (QSS) 스타일시트 및 리소스(아이콘) 적용
+        - [ ] **Phase 2: 대시보드 및 시각화 (Dashboard)**
+            - [ ] `RealTimeChart`: PyQtGraph 기반 캔들스틱, 이평선, 매매 마커 표시
             - [ ] `OrderBook`: 10단계 호가창, 잔량 그래프, 체결강도 표시
         - [ ] **Phase 3: 제어 및 실행 (Control & Execution)**
             - [ ] `ControlPanel`: 전략 현황(점수/국면), 계좌 요약, 보유 종목 리스트
@@ -151,6 +165,23 @@
         - [x] `Scheduler`: 장 시작/마감 자동화, 왓치독(Health Check)
         - [x] **실행 모듈 단위 테스트**
     - [ ] **UI 연동을 위한 백엔드 보강 (Backend Refinement)** <!-- id: 15-pre -->
+        - [x] **Step 1: 시장 국면 탐지**
+            - [x] `MarketRegimeDetector` 클래스 구조 및 데이터 수집 로직 구현
+            - [x] 국면 판단 알고리즘 (ADX, 이동평균) 구현 및 테스트
+        - [x] **Step 2: 주문 관리 확장**
+            - [x] `OrderManager`: `send_manual_order` (수동 주문) 메서드 구현
+            - [x] `OrderManager`: `cancel_all_orders` (일괄 취소) 메서드 구현
+        - [x] **Step 3: 실행 엔진 제어**
+            - [x] `ExecutionEngine`: `stop_trading` (긴급 정지) 로직 구현
+            - [x] `ExecutionEngine`: UI용 상태 노출 메서드 (`get_state`) 구현
+        - [x] **Step 4: 데이터 수집기 확장**
+            - [x] `DataCollector`: 조건검색식 목록 조회 API 연동
+            - [x] `DataCollector`: 조건검색식 구독/해지 및 이벤트 처리 구현
+    - [ ] **UI 구현 (PyQt6)** <!-- id: 15 -->
+        - [ ] **Phase 1: 기본 구조 (Foundation)**
+            - [ ] `MainWindow`: Dock Widget 레이아웃 구성
+            - [ ] `HeaderBar`: 상단 상태바 UI 및 데이터 바인딩
+            - [ ] `Styles`: Dark Mode QSS 작성 및 아이콘 리소스 적용
         - [ ] **Phase 2: 대시보드 (Dashboard)**
             - [ ] `RealTimeChart`: 캔들스틱 차트 기본 구현 (PyQtGraph)
             - [ ] `RealTimeChart`: 보조지표(MA) 및 매매 마커 연동

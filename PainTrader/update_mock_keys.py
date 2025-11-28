@@ -10,9 +10,9 @@ def update_keys():
     print("=== Updating API Keys to Mock Account 1 (Corrected) ===")
     
     # Mock Account 1 (Corrected)
-    app_key = "ZR3BLQaFzm8NqhmPX3j2fr3M8BzqxIDNElbjoN26viE"
-    secret_key = "e4h10TwInywHa1FN0Dxupt-Y1Ij8EkGukZJ2MohCdVs"
-    account_no = "81153579"
+    app_key = "YOUR_MOCK_APP_KEY"
+    secret_key = "YOUR_MOCK_SECRET_KEY"
+    account_no = "YOUR_MOCK_ACCOUNT_NO"
     
     secure_storage.save("KIWOOM_APP_KEY", app_key)
     secure_storage.save("KIWOOM_SECRET_KEY", secret_key)

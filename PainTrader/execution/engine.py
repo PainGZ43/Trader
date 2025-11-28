@@ -119,15 +119,31 @@ class ExecutionEngine:
         # We need a state flag
         self.is_running = False
 
+    async def start_trading(self):
+        """
+        Resume trading activities.
+        """
+        if not self.is_running:
+            self.is_running = True
+            self.logger.info("Trading Engine Resumed.")
+            await self.notification_manager.send_message("▶ [시스템] 트레이딩을 재개합니다.", level="INFO")
+
     def get_state(self) -> Dict[str, Any]:
         """
         Return current engine state for UI.
         """
+        summary = self.account_manager.get_summary()
+        active_orders_count = len(self.order_manager.active_orders)
+        
         return {
-            "is_running": getattr(self, "is_running", True), # Default True until stopped
+            "is_running": getattr(self, "is_running", True),
             "mode": self.mode,
             "account": self.account_num,
-            "market_status": "OPEN" if self.scheduler else "CLOSED" # Simplified
+            "market_status": "OPEN" if self.scheduler else "CLOSED", # Simplified
+            "total_asset": summary["balance"].get("total_asset", 0),
+            "daily_pnl": summary["balance"].get("daily_pnl", 0),
+            "deposit": summary["balance"].get("deposit", 0),
+            "active_orders_count": active_orders_count
         }
 
     async def initialize(self):

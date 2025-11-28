@@ -45,7 +45,7 @@ async def test_key(app_key, secret_key):
 
 if __name__ == "__main__":
     # Corrected keys from user
-    app_key = "ZR3BLQaFzm8NqhmPX3j2fr3M8BzqxIDNElbjoN26viE"
-    secret_key = "e4h10TwInywHa1FN0Dxupt-Y1Ij8EkGukZJ2MohCdVs"
+    app_key = "YOUR_APP_KEY"
+    secret_key = "YOUR_SECRET_KEY"
     
     asyncio.run(test_key(app_key, secret_key))

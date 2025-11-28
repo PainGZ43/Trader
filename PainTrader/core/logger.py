@@ -26,9 +26,25 @@ class CustomFormatter(logging.Formatter):
         formatter = logging.Formatter(log_fmt, datefmt='%Y-%m-%d %H:%M:%S')
         return formatter.format(record)
 
+class CallbackHandler(logging.Handler):
+    """
+    Custom handler to send logs to a callback (e.g., UI).
+    """
+    def __init__(self, callback):
+        super().__init__()
+        self.callback = callback
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            self.callback(record.levelno, msg)
+        except Exception:
+            self.handleError(record)
+
 class Logger:
     _instance = None
     _loggers = {}
+    _callback_handler = None
 
     def __new__(cls):
         if cls._instance is None:
@@ -50,6 +66,22 @@ class Logger:
             self.level = logging.WARNING
         elif env_level == "ERROR":
             self.level = logging.ERROR
+
+    def add_callback(self, callback):
+        """
+        Register a callback for log messages.
+        callback(level, message)
+        """
+        if self._callback_handler:
+            return # Already registered
+            
+        self._callback_handler = CallbackHandler(callback)
+        formatter = logging.Formatter("%(asctime)s | %(levelname)-8s | %(name)-15s | %(message)s", datefmt='%H:%M:%S')
+        self._callback_handler.setFormatter(formatter)
+        
+        # Add to existing loggers
+        for logger in self._loggers.values():
+            logger.addHandler(self._callback_handler)
 
     def get_logger(self, name):
         if name in self._loggers:
@@ -77,6 +109,10 @@ class Logger:
         )
         file_handler.setFormatter(file_formatter)
         logger.addHandler(file_handler)
+        
+        # Add Callback Handler if exists
+        if self._callback_handler:
+            logger.addHandler(self._callback_handler)
 
         self._loggers[name] = logger
         return logger

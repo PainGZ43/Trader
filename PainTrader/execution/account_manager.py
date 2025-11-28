@@ -99,6 +99,10 @@ class AccountManager:
             self.positions = new_positions
             self.logger.debug(f"Balance Updated. Asset: {self.balance['total_asset']:,.0f}, Positions: {len(self.positions)}")
             
+            # Publish Event for UI
+            from core.event_bus import event_bus
+            event_bus.publish("ACCOUNT_UPDATE", self.get_summary())
+            
         except Exception as e:
             self.logger.error(f"Error updating balance: {e}")
 

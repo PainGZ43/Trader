@@ -15,9 +15,9 @@ async def test_key_manager():
     print("\n[1] Adding Mock Key...")
     owner = "Test Mock"
     key_type = "MOCK"
-    account = "81153579"
-    app_key = "ZR3BLQaFzm8NqhmPX3j2fr3M8BzqxIDNElbjoN26viE"
-    secret = "e4h10TwInywHa1FN0Dxupt-Y1Ij8EkGukZJ2MohCdVs"
+    account = "YOUR_MOCK_ACCOUNT"
+    app_key = "YOUR_MOCK_APP_KEY"
+    secret = "YOUR_MOCK_SECRET_KEY"
     expiry = (datetime.now() + timedelta(days=365)).strftime("%Y-%m-%d")
     
     # Verify first (mocking the verify call or using real one)
@@ -38,9 +38,9 @@ async def test_key_manager():
     print("\n[2] Adding Real Key...")
     owner_real = "Test Real"
     type_real = "REAL"
-    acc_real = "55480828"
-    app_real = "NUyOeBat-OXdhOlNL2JoanurvJgNJv-60v49yFDKru8"
-    sec_real = "rlnQQBXknNjaqqAL3fQs0KGOgeMWi1I9NPl-ykOtTWQ"
+    acc_real = "YOUR_REAL_ACCOUNT"
+    app_real = "YOUR_REAL_APP_KEY"
+    sec_real = "YOUR_REAL_SECRET_KEY"
     
     print("Verifying real key with API...")
     is_valid_real = await key_manager.verify_key(app_real, sec_real, False)

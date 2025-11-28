@@ -71,6 +71,8 @@ class StrategyInterface(ABC):
         """
         pass
 
+from strategy.market_regime import MarketRegimeDetector
+
 class BaseStrategy(StrategyInterface):
     """
     Base Strategy Implementation with common functionality.
@@ -82,9 +84,9 @@ class BaseStrategy(StrategyInterface):
         self.config = {}
         self.state = StrategyState(strategy_id=strategy_id, symbol=symbol, indicators={}, last_update=datetime.now())
         
-        # Components (To be injected or initialized)
+        # Components
         self.position_sizer = None 
-        self.market_regime_detector = None
+        self.market_regime_detector = MarketRegimeDetector()
 
     def initialize(self, config: Dict[str, Any]):
         self.config = config

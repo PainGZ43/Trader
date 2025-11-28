@@ -55,20 +55,54 @@ class HybridStrategy(BaseStrategy):
         return df
 
     async def on_realtime_data(self, data: Dict[str, Any]) -> Optional[Signal]:
-        # 1. Get Technical Signal
-        # We need a way to get the latest DF from data collector or maintain it.
-        # Assuming we can get the latest indicators or DF.
-        # For now, let's assume we have access to the latest candle.
-        
-        # Placeholder for realtime logic
-        # rsi_signal = ...
-        
-        # 2. Get AI Prediction
-        # input_features = ...
-        # ai_score = ai_engine.predict(input_features, self.model_name)
-        
-        # 3. Combine
-        # if rsi_signal == 1 and ai_score > self.ai_threshold:
-        #     return Signal(...)
-        
-        return None
+        """
+        Real-time signal generation.
+        """
+        try:
+            from data.data_collector import data_collector
+            from strategy.market_regime import MarketRegime
+            
+            # 1. Get Data
+            df = await data_collector.get_recent_data(self.symbol, limit=100)
+            if df.empty or len(df) < 60:
+                return None
+                
+            # 2. Detect Market Regime
+            regime_info = self.market_regime_detector.detect(df)
+            regime = regime_info['regime']
+            
+            # Filter: Do not buy in Bear market
+            if regime == MarketRegime.BEAR:
+                return None
+                
+            # 3. Technical Analysis (RSI)
+            # We need to calculate RSI on this DF
+            # Using RSIStrategy's logic or direct calculation
+            # For simplicity, let's use the indicator engine directly or the rsi_strategy if it exposes a method
+            # rsi_strategy.calculate_signals works on DF.
+            
+            df = self.rsi_strategy.calculate_signals(df)
+            last_signal = df['signal'].iloc[-1]
+            
+            if last_signal != 1: # Only interested in Buy for now
+                return None
+                
+            # 4. AI Prediction (Mock for now, or real if engine ready)
+            # ai_score = await ai_engine.predict_async(df) 
+            ai_score = 0.7 # Mock
+            
+            if ai_score > self.ai_threshold:
+                return Signal(
+                    symbol=self.symbol,
+                    type="BUY",
+                    price=df['close'].iloc[-1],
+                    timestamp=datetime.now(),
+                    reason=f"RSI Buy + AI Score {ai_score:.2f} + Regime {regime.value}",
+                    score=ai_score
+                )
+                
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error in on_realtime_data: {e}")
+            return None

@@ -10,9 +10,9 @@ def update_keys():
     print("=== Updating API Keys to Real Account 2 ===")
     
     # Real Account 2 (55480828)
-    app_key = "NUyOeBat-OXdhOlNL2JoanurvJgNJv-60v49yFDKru8"
-    secret_key = "rlnQQBXknNjaqqAL3fQs0KGOgeMWi1I9NPl-ykOtTWQ"
-    account_no = "55480828"
+    app_key = "YOUR_APP_KEY"
+    secret_key = "YOUR_SECRET_KEY"
+    account_no = "YOUR_ACCOUNT_NO"
     
     secure_storage.save("KIWOOM_APP_KEY", app_key)
     secure_storage.save("KIWOOM_SECRET_KEY", secret_key)
