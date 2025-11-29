@@ -1,0 +1,177 @@
+# 상세 설계: 사용자 인터페이스 (UI/UX) 모듈
+
+## 1. 개요
+이 모듈은 사용자가 시스템을 모니터링하고 제어하는 **시각적 인터페이스**입니다. **PyQt6**를 사용하여 고성능 데스크탑 애플리케이션으로 구현하며, **Dark Mode** 기반의 전문가용 HTS 스타일을 지향합니다.
+
+## 2. 메인 윈도우 레이아웃 (Main Window)
+사용자가 원하는 대로 창을 배치할 수 있는 **Dock Widget** 구조를 채택합니다.
+
+### 2.1. 상단 헤더 (Header Bar)
+*   **시스템 상태**: API 연결 상태(초록/빨간 점), 현재 시간.
+*   **시장 지표 (Macro)**: 코스피/코스닥 지수, **원/달러 환율**.
+*   **글로벌 컨트롤**: [자동매매 시작/중지] 버튼, [설정] 버튼, [로그] 버튼.
+
+### 2.2. 대시보드 (Dashboard) - 중앙
+*   **실시간 차트 (Real-time Chart)**:
+    *   `PyQtGraph` 라이브러리 사용 (고성능).
+    *   Candlestick, MA선, 거래량 바 차트.
+    *   매수/매도 체결 시점에 화살표 마커 표시.
+*   **호가창 (Order Book)**:
+    *   매도 10호가 / 매수 10호가 및 잔량 표시.
+    *   체결강도 게이지 바.
+
+### 2.3. 제어 패널 (Control Panel) - 우측
+*   **전략 현황**: 현재 활성화된 전략 이름, AI 예측 점수(Confidence).
+*   **계좌 요약**: 총 예수금, 총 평가손익, 당일 실현손익.
+*   **보유 종목 리스트 (Portfolio)**:
+    *   테이블 형태: 종목명, 수량, 평단가, 현재가, 수익률(%).
+    *   수익률에 따라 텍스트 색상 변경 (빨강/파랑).
+
+### 2.4. 로그 및 리포트 (Log & Report) - 하단
+*   **로그 뷰어**: 시스템/매매/에러 로그 필터링 조회.
+*   **상세 리포트 탭**:
+    *   **일별 수익률**: 캘린더 형태로 일별 손익 표시.
+    *   **매매 분석**: 승률, 손익비, MDD 등 통계 그래프 제공.
+
+## 3. 주요 다이얼로그 (Dialogs)
+
+### 3.1. 통합 설정 (Global Settings)
+모든 설정은 하나의 통합 다이얼로그에서 탭(Tab)으로 구분하여 관리합니다.
+
+#### [Tab 1] 일반 (General)
+*   **테마 설정**: [Dark Mode / Light Mode] 라디오 버튼.
+*   **시스템**:
+    *   [x] 윈도우 시작 시 자동 실행.
+    *   [x] 자동 로그인 (OAuth2 토큰 자동 갱신).
+    *   로그 보관 기간 (일): [ 30 ] (기본값).
+
+#### [Tab 2] 계정 및 API (Account & API)
+*   **키움증권 (Kiwoom)**:
+    *   ID / 비밀번호 / 인증서 비밀번호 입력 필드.
+    *   `[암호화 저장]` 버튼: 입력된 정보를 OS 보안 저장소(Keyring)에 저장하고 필드는 비움.
+    *   계좌 선택: 드롭다운으로 매매할 계좌 선택 (복수 계좌 지원).
+*   **카카오톡 (KakaoTalk)**:
+    *   REST API Key / Access Token / Refresh Token 입력.
+    *   `[토큰 발급 가이드]` 링크 제공.
+    *   `[전송 테스트]` 버튼: "테스트 메시지" 발송하여 연결 확인.
+
+#### [Tab 3] 전략 및 타겟 (Strategy & Target)
+*   **전략 선택**:
+    *   **Active Strategy**: [ 변동성 돌파 전략 (VBS) ▼ ]
+    *   **설명**: 선택된 전략에 대한 간단한 설명 표시.
+*   **파라미터 튜닝 (Parameters)**:
+    *   선택된 전략에 따라 동적으로 변하는 테이블 (Key-Value).
+    *   예: `k` (0.5), `moving_average` (20), `profit_target` (5.0%).
+*   **타겟 소스 (Target Source)**:
+    *   [ ] **관심종목**: 사용자 정의 리스트 (종목코드 직접 입력).
+    *   [ ] **조건검색**: 키움 조건검색식 목록 불러오기 -> [ 골든크로스 포착 ▼ ].
+    *   [ ] **AI 추천**: AI 모델이 선정한 Top N 종목 자동 편입.
+
+#### [Tab 4] 리스크 관리 (Risk Management)
+*   **자금 관리**:
+    *   종목당 최대 투자금: [ 1,000,000 ] 원.
+    *   최대 보유 종목 수: [ 5 ] 개.
+*   **손실 제한 (Stop Loss)**:
+    *   [x] **일일 손실 한도**: 자산의 [ 3.0 ] % 도달 시 매매 중단.
+    *   [x] **개별 종목 손절선**: 진입가 대비 [ -2.0 ] %.
+*   **블랙리스트**:
+    *   매매 제외 종목 코드/명 입력 및 관리.
+
+#### [Tab 5] 알림 (Notification)
+*   **채널**: [x] 카카오톡, [ ] 텔레그램 (추후 지원).
+*   **이벤트별 설정**:
+    *   [x] 매수/매도 체결 알림.
+    *   [x] 시스템 에러/경고 알림.
+    *   [x] 일일 리포트 (장 마감 후).
+    *   [ ] 전략 신호 발생 (매매 전) 알림.
+
+## 4. UI 배치 계획 (Layout Strategy)
+사용자 편의성과 직관성을 최우선으로 고려하여, 시선의 흐름(Monitoring -> Decision -> Action)에 최적화된 레이아웃을 설계합니다. 불필요한 장식을 배제하고 정보 전달에 집중하는 **Minimalist & Professional** 디자인을 적용합니다.
+
+### 4.1. 전체 레이아웃 (Wireframe)
+```text
++-----------------------------------------------------------------------+
+| [A] Header Bar: Logo | Status(API/DB) | Macro(KOSPI/USD) | Global Btn |
++-----------------------------------------------------------------------+
+| [B] Left Panel    | [C] Center Panel (Main)       | [D] Right Panel   |
+| (Strategy/Asset)  | (Chart & Analysis)            | (Execution)       |
+|                   |                               |                   |
+| 1. Strategy Status| 1. Real-time Chart (Candle)   | 1. Order Book     |
+| - Active Strategy | - Buy/Sell Markers            | (10 Levels)       |
+| - AI Score        | - Technical Indicators        |                   |
+| - Market Regime   |                               |                   |
+|                   |                               | 2. Manual Order   |
+| 2. Account Summary|                               | - Buy/Sell Tabs   |
+| - Total Asset     |                               | - Price/Qty Input |
+| - Daily PnL       |                               |                   |
+|                   |                               |                   |
+| 3. Portfolio      |                               | 3. Panic Button   |
+| - Symbol | PnL %  |                               | [STOP TRADING]    |
+| - Symbol | PnL %  |                               |                   |
++-------------------+-------------------------------+-------------------+
+| [E] Bottom Panel: Log Viewer | Trade History | System Warning         |
++-----------------------------------------------------------------------+
+```
+
+### 4.2. 영역별 상세 설계 (Zone Details)
+
+#### [A] Header Bar (높이 40px 고정)
+*   **좌측**: 로고 및 프로그램 타이틀.
+*   **중앙**: 핵심 매크로 지표 (코스피, 코스닥, 환율) - 실시간 등락 색상 표시.
+*   **우측**:
+    *   **상태 아이콘**: API 연결(초록점), DB 연결, 소켓 상태, **시스템 리소스(CPU/Mem)**.
+    *   **글로벌 버튼**: `[▶ 시작]`, `[⏹ 정지]`, `[⚙ 설정]`.
+
+#### [B] Left Panel (너비 280px 고정) - "현황 파악"
+*   **Strategy Status**: 현재 구동 중인 전략과 AI의 판단(점수), **시장 국면(Market Regime)**을 한눈에 표시.
+    *   **Quick Control**: 각 전략별 `[ON/OFF]` 토글 스위치 제공 (설정창 진입 없이 제어).
+*   **Account Summary**: 예수금과 당일 손익을 큼직한 폰트로 강조.
+*   **Portfolio Table**: 보유 종목의 핵심 정보(종목명, 수익률)만 간결하게 표시. 클릭 시 차트([C]) 연동.
+
+#### [C] Center Panel (가변 너비) - "심층 분석"
+*   **Main Chart**: 화면의 가장 큰 영역 차지. 탭(Tab) 구조로 확장 가능 (차트 / 백테스트 결과 / 수급 분석).
+*   **Interaction**: 마우스 휠 줌/팬, 십자선(Crosshair) 조회.
+
+#### [D] Right Panel (너비 260px 고정) - "즉각 대응"
+*   **Order Book (호가창)**: 매수/매도 10호가. 호가 등락에 따른 배경색 점멸(Flash) 효과.
+*   **Manual Order**: 자동매매 중 개입이 필요할 때 빠르게 주문을 낼 수 있는 간소화된 주문창.
+*   **Panic Button**: 최하단에 붉은색으로 배치. 오작동 시 즉시 모든 주문 취소 및 청산.
+    *   **안전장치**: 실수 방지를 위해 '더블 클릭' 또는 '3초간 누르기'로 작동.
+
+#### [E] Bottom Panel (높이 180px, 접기 가능) - "이력 관리"
+*   **Active Orders (미체결)**: 현재 대기 중인 주문 목록. **[취소]** 버튼 제공.
+*   **Trade History (체결)**: 당일 체결 내역 리스트.
+*   **Log Viewer**: 시스템 로그. 중요도(INFO/ERROR)에 따른 색상 구분.
+*   **Notification**: 카카오톡 발송 내역.
+*   **System Warning**: 시스템 경고 메시지.
+
+## 5. UX/UI 디자인 원칙
+*   **테마 지원 (Theme Support)**: 사용자의 선호에 따라 **Dark Mode** (기본값)와 **Light Mode**를 전환할 수 있도록 스타일시트(QSS) 분리 적용.
+*   **반응형 (Responsive)**: 창 크기 조절 시 차트와 테이블이 비율에 맞춰 자동 리사이징.
+*   **즉각적 피드백**: 버튼 클릭 시 클릭 효과, 주문 전송 시 상태바 메시지 표시.
+*   **화면 배치 저장 (Workspace Persistence)**: 사용자가 변경한 Dock Widget 레이아웃을 종료 시 자동 저장하고 재시작 시 복원.
+
+## 6. Technical Specifications (Data Flow)
+
+### 6.1. EventBus Topics
+UI components will subscribe to the following topics to receive real-time updates without polling.
+
+*   `market.data.tick`: Real-time price updates (Chart, OrderBook).
+    *   Data: `{symbol, price, open, high, low, volume, timestamp}`
+*   `market.data.orderbook`: Order book updates.
+    *   Data: `{symbol, asks: [], bids: []}`
+*   `order.update`: Order status changes (Pending -> Filled/Cancelled).
+    *   Data: `{order_id, status, filled_qty, ...}`
+*   `strategy.update`: Strategy status changes (AI Score, Regime).
+    *   Data: `{strategy_id, is_active, score, regime}`
+*   `system.resource`: CPU/Memory usage stats.
+    *   Data: `{cpu_percent, memory_percent}`
+
+### 6.2. Performance Optimization
+*   **QThread**: Network I/O and heavy calculations (e.g., Backtesting) must run on separate threads.
+*   **Signal/Slot Throttling**: High-frequency events (Tick) should be throttled (e.g., 100ms interval) before updating the UI to prevent freezing.
+*   **OpenGL**: Use `PyQtGraph`'s OpenGL acceleration for charts.
+
+## 7. 테스트 계획 (Testing Plan)
+*   **기능 테스트**: 버튼 클릭 시 의도한 다이얼로그가 뜨는지, 설정값이 저장되는지 확인.
+*   **연동 테스트**: 가상 데이터를 흘려보냈을 때 차트가 실시간으로 그려지는지, 호가창이 갱신되는지 확인.
