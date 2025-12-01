@@ -1,0 +1,119 @@
+/* Global Dark Theme */
+QMainWindow {
+    background-color: #1e1e1e;
+    color: #ffffff;
+}
+
+QWidget {
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 14px;
+}
+
+/* Dock Widget */
+QDockWidget {
+    titlebar-close-icon: url(:/icons/close.png);
+    titlebar-normal-icon: url(:/icons/restore.png);
+    border: 1px solid #333333;
+}
+
+QDockWidget::title {
+    background: #2d2d2d;
+    padding-left: 10px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    font-weight: bold;
+}
+
+/* Header Bar */
+QFrame#HeaderBar {
+    background-color: #252526;
+    border-bottom: 1px solid #333333;
+}
+
+QLabel#LogoLabel {
+    font-size: 18px;
+    font-weight: bold;
+    color: #007acc;
+}
+
+/* Buttons */
+QPushButton {
+    background-color: #3c3c3c;
+    border: 1px solid #333333;
+    border-radius: 4px;
+    padding: 5px 15px;
+    color: #ffffff;
+}
+
+QPushButton:hover {
+    background-color: #505050;
+}
+
+QPushButton:pressed {
+    background-color: #252526;
+}
+
+QPushButton#PanicButton {
+    background-color: #d32f2f;
+    color: white;
+    font-weight: bold;
+    border: none;
+}
+
+QPushButton#PanicButton:hover {
+    background-color: #b71c1c;
+}
+
+/* Table Widget */
+QTableWidget {
+    background-color: #1e1e1e;
+    gridline-color: #333333;
+    border: none;
+}
+
+QHeaderView::section {
+    background-color: #2d2d2d;
+    padding: 4px;
+    border: 1px solid #333333;
+    font-weight: bold;
+}
+
+QTableWidget::item {
+    padding: 5px;
+}
+
+QTableWidget::item:selected {
+    background-color: #37373d;
+}
+
+/* ScrollBar */
+QScrollBar:vertical {
+    border: none;
+    background: #1e1e1e;
+    width: 10px;
+    margin: 0px 0px 0px 0px;
+}
+
+QScrollBar::handle:vertical {
+    background: #424242;
+    min-height: 20px;
+    border-radius: 5px;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+/* Progress Bar */
+QProgressBar {
+    border: 1px solid #333333;
+    border-radius: 2px;
+    text-align: center;
+    background-color: #1e1e1e;
+}
+
+QProgressBar::chunk {
+    background-color: #007acc;
+}

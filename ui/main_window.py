@@ -1,151 +1,152 @@
-from PyQt6.QtWidgets import QMainWindow, QDockWidget, QLabel, QStatusBar, QToolBar, QMessageBox
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer
-from ui.log_viewer import LogViewer
-from ui.header_bar import HeaderBar
+import os
+from PyQt6.QtWidgets import QMainWindow, QDockWidget, QWidget, QTextEdit, QLabel, QMessageBox
+from PyQt6.QtCore import Qt, QSettings, pyqtSignal
+from PyQt6.QtGui import QIcon
+import qtawesome as qta
+
+from ui.widgets.header_bar import HeaderBar
 from ui.dashboard import Dashboard
-from data.data_collector import data_collector
-from data.key_manager import key_manager
-from ui.key_settings_dialog import KeySettingsDialog
+from core.logger import get_logger
+
+from ui.widgets.control_panel import ControlPanel
+from ui.widgets.order_panel import OrderPanel
+from ui.settings_dialog import SettingsDialog
+from ui.log_viewer import LogViewer
+from ui.log_viewer import LogViewer
+from core.event_bus import event_bus
+from core.language import language_manager
 
 class MainWindow(QMainWindow):
-    status_received = pyqtSignal(dict)
+    # Backend -> UI Signals
+    update_macro_signal = pyqtSignal(dict)
+    update_tick_signal = pyqtSignal(dict)
+    update_orderbook_signal = pyqtSignal(dict)
+    update_account_signal = pyqtSignal(dict)
+    update_portfolio_signal = pyqtSignal(list)
+    system_error_signal = pyqtSignal(dict)
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("PainTrader - AI Auto Trading System")
-        self.resize(1280, 800)
+        self.logger = get_logger("MainWindow")
+        self.setWindowTitle(language_manager.get_text("window_title"))
+        self.resize(1600, 900)
         
-        self.status_received.connect(self.update_status_bar)
+        # Load Styles
+        self._load_stylesheet()
         
-        self.init_ui()
-
-    def init_ui(self):
-        # 1. Header Bar (Top)
-        self.header_bar = HeaderBar()
+        # Setup UI
+        self._init_ui()
         
-        toolbar = QToolBar()
-        toolbar.setMovable(False)
-        toolbar.setFloatable(False)
-        toolbar.addWidget(self.header_bar)
-        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, toolbar)
-
-        # 2. Status Bar
-        self.status_bar = QStatusBar()
-        self.setStatusBar(self.status_bar)
-        self.status_bar.showMessage("System Ready")
+        # Connect Signals (EventBus <-> UI)
+        self._connect_signals()
         
-        # 3. Menu Bar
-        self.setup_menu()
+        # Restore State
+        self._restore_state()
 
-        # 4. Dock Manager
-        self.setDockOptions(QMainWindow.DockOption.AllowTabbedDocks | QMainWindow.DockOption.AnimatedDocks)
+    def _load_stylesheet(self):
+        try:
+            style_path = os.path.join(os.path.dirname(__file__), "styles.qss")
+            with open(style_path, "r") as f:
+                self.setStyleSheet(f.read())
+        except Exception as e:
+            self.logger.error(f"Failed to load stylesheet: {e}")
 
-        # 5. Central Widget (Dashboard)
+    def _init_ui(self):
+        # 1. Header Bar
+        self.header = HeaderBar(self)
+        self.header.settings_btn.clicked.connect(self.open_settings)
+        self.setMenuWidget(self.header) # Use setMenuWidget to place it at top
+        
+        # 2. Central Widget (Dashboard)
         self.dashboard = Dashboard()
         self.setCentralWidget(self.dashboard)
         
-        # Connect DataCollector to Dashboard
-        data_collector.add_observer(self.dashboard.on_data_received)
-        # Connect DataCollector to MainWindow (for Status Bar)
-        data_collector.add_observer(self.on_data_received)
+        # 3. Dock Widgets
+        self._create_dock_widgets()
 
-        # 6. Log Viewer Dock (Bottom)
-        self.log_dock = QDockWidget("System Logs", self)
+    def _create_dock_widgets(self):
+        # Left Panel (Strategy & Account)
+        self.dock_left = self._create_dock(language_manager.get_text("dock_strategy"), Qt.DockWidgetArea.LeftDockWidgetArea)
+        self.control_panel = ControlPanel()
+        self.dock_left.setWidget(self.control_panel)
+        
+        # Right Panel (Order Book & Execution)
+        self.dock_right = self._create_dock(language_manager.get_text("dock_execution"), Qt.DockWidgetArea.RightDockWidgetArea)
+        self.order_panel = OrderPanel()
+        self.dock_right.setWidget(self.order_panel)
+        
+        # Bottom Panel (Logs & History)
+        self.dock_bottom = self._create_dock(language_manager.get_text("dock_logs"), Qt.DockWidgetArea.BottomDockWidgetArea)
         self.log_viewer = LogViewer()
-        self.log_dock.setWidget(self.log_viewer)
-        self.log_dock.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
-        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.log_dock)
+        self.dock_bottom.setWidget(self.log_viewer)
 
-        # 7. Control Panel Dock (Right) - Placeholder
-        self.control_dock = QDockWidget("Control Panel", self)
-        self.control_label = QLabel("Strategy & Account Info")
-        self.control_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.control_dock.setWidget(self.control_label)
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.control_dock)
-
-        # Apply Dark Theme (Basic)
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #2b2b2b;
-            }
-            QDockWidget {
-                color: white;
-                font-weight: bold;
-            }
-            QDockWidget::title {
-                background: #3c3c3c;
-                padding-left: 5px;
-            }
-        """)
-        
-        # Delayed initialization for Account Info & Expiration Check (Startup)
-        QTimer.singleShot(500, lambda: self.initialize_account_and_check_expiry(startup=True))
-
-    def setup_menu(self):
-        from PyQt6.QtGui import QAction
-        menubar = self.menuBar()
-        
-        # File Menu
-        file_menu = menubar.addMenu('파일')
-        exit_action = QAction('종료', self)
-        exit_action.setShortcut('Ctrl+Q')
-        exit_action.triggered.connect(self.close)
-        file_menu.addAction(exit_action)
-        
-        # Settings Menu
-        settings_menu = menubar.addMenu('설정')
-        
-        # API Key Management Action
-        key_action = QAction('API 키 관리', self)
-        key_action.triggered.connect(self.open_key_settings)
-        settings_menu.addAction(key_action)
-
-    def open_key_settings(self):
-        dialog = KeySettingsDialog(self)
+    def open_settings(self):
+        dialog = SettingsDialog(self)
         dialog.exec()
-        
-        # Refresh Account Info after dialog closes (Not startup)
-        self.initialize_account_and_check_expiry(startup=False)
 
-    def initialize_account_and_check_expiry(self, startup=False):
-        """
-        Fetch active key info, update header, and check expiration.
-        """
-        # Check Auto-Login on Startup
-        if startup and not key_manager.is_auto_login_enabled():
-            self.header_bar.update_account_info(None)
-            return
+    def _create_dock(self, title, area):
+        dock = QDockWidget(title, self)
+        dock.setObjectName(title) # Required for saveState
+        dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
+        self.addDockWidget(area, dock)
+        return dock
 
-        # 1. Get Active Key Info
-        keys = key_manager.get_keys()
-        active_key = next((k for k in keys if k["is_active"]), None)
+    def _connect_signals(self):
+        """Connect EventBus events to UI signals and UI actions to EventBus."""
+        # 1. Subscribe to Backend Events (Background Thread -> Main Thread via Signal)
+        event_bus.subscribe("market.data.macro", lambda e: self.update_macro_signal.emit(e.data))
+        event_bus.subscribe("market.data.tick", lambda e: self.update_tick_signal.emit(e.data))
+        event_bus.subscribe("market.data.orderbook", lambda e: self.update_orderbook_signal.emit(e.data))
+        event_bus.subscribe("account.summary", lambda e: self.update_account_signal.emit(e.data))
+        event_bus.subscribe("account.portfolio", lambda e: self.update_portfolio_signal.emit(e.data))
+        event_bus.subscribe("system.error", lambda e: self.system_error_signal.emit(e.data))
         
-        if active_key:
-            # Update Header Bar
-            self.header_bar.update_account_info(active_key)
-            
-            # 2. Check Expiration (Active Only)
-            warning = key_manager.check_active_key_expiration()
-            if warning:
-                QMessageBox.warning(self, "API 키 만료 경고", warning)
+        # 2. Connect Signals to UI Slots
+        self.update_macro_signal.connect(self.header.update_macro)
+        self.update_tick_signal.connect(lambda d: self.dashboard.process_data({"type": "REALTIME", **d}))
+        self.update_orderbook_signal.connect(lambda d: self.dashboard.process_data({"type": "ORDERBOOK", **d}))
+        
+        self.update_account_signal.connect(lambda d: self.control_panel.update_account_summary(
+            d.get("total_asset", 0), d.get("deposit", 0), d.get("total_pnl", 0), d.get("pnl_pct", 0)
+        ))
+        self.update_portfolio_signal.connect(self.control_panel.update_portfolio)
+        
+        self.system_error_signal.connect(self._on_system_error)
+        
+        # 3. Connect UI Actions to Backend (Main Thread -> EventBus)
+        self.order_panel.send_order_signal.connect(lambda order: event_bus.publish("order.create", order))
+        self.order_panel.panic_signal.connect(lambda action: event_bus.publish("system.panic", {"action": action}))
+        self.control_panel.close_position_signal.connect(lambda code: event_bus.publish("order.close", {"code": code}))
+
+    def _on_system_error(self, data):
+        level = data.get("level", "WARNING")
+        msg = data.get("message", "Unknown Error")
+        if level == "CRITICAL":
+            QMessageBox.critical(self, "Critical Error", msg)
         else:
-            self.header_bar.update_account_info(None)
+            self.statusBar().showMessage(f"Error: {msg}", 5000)
 
-    def on_data_received(self, data):
-        """
-        Handle DataCollector events.
-        """
-        if data.get("type") == "STATUS":
-            self.status_received.emit(data)
+    def closeEvent(self, event):
+        """Save state and shutdown gracefully."""
+        self._save_state()
+        
+        # Trigger Graceful Shutdown
+        event_bus.publish("system.shutdown")
+        
+        # Wait a bit? (In a real app, we might want to wait for a 'shutdown.complete' signal)
+        # For now, we just proceed.
+        super().closeEvent(event)
 
-    def update_status_bar(self, data):
-        """
-        Update Status Bar UI.
-        """
-        is_open = data.get("market_open", False)
-        is_connected = data.get("api_connected", False)
-        
-        market_text = "Market: OPEN" if is_open else "Market: CLOSED"
-        api_text = "API: Connected" if is_connected else "API: Disconnected"
-        
-        self.status_bar.showMessage(f"{api_text} | {market_text}")
+    def _save_state(self):
+        settings = QSettings("PainTrader", "MainWindow")
+        settings.setValue("geometry", self.saveGeometry())
+        settings.setValue("windowState", self.saveState())
+        self.logger.info("Window state saved.")
+
+    def _restore_state(self):
+        settings = QSettings("PainTrader", "MainWindow")
+        if settings.value("geometry"):
+            self.restoreGeometry(settings.value("geometry"))
+        if settings.value("windowState"):
+            self.restoreState(settings.value("windowState"))
+        self.logger.info("Window state restored.")

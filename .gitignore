@@ -34,3 +34,16 @@ htmlcov/
 # Database Temp
 *.db-shm
 *.db-wal
+
+# Sensitive Data
+data/key_metadata.json
+config/settings.yaml
+
+# Utility Scripts (contain keys)
+update_keys.py
+update_real_keys.py
+update_mock_keys.py
+verify_key_manager.py
+test_corrected_keys.py
+debug_expiry.py
+scripts/verify_mock_investment.py

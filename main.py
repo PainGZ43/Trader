@@ -11,6 +11,10 @@ def main():
     logger = get_logger("Main")
     logger.info("Starting PainTrader Application...")
 
+    # Global Exception Handler
+    from core.exception_handler import exception_handler
+    sys.excepthook = exception_handler.handle_exception
+
     # Create Qt Application
     app = QApplication(sys.argv)
     

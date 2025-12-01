@@ -3,10 +3,13 @@ import yaml
 import json
 from dotenv import load_dotenv
 
+from core.utils import get_config_path
+import shutil
+
 class ConfigLoader:
     """
     Loads configuration from environment variables (.env), YAML, and JSON files.
-    Priority: Environment Variables > JSON > YAML > Defaults
+    Priority: Environment Variables > AppData JSON > Local JSON > YAML > Defaults
     """
     _instance = None
 
@@ -27,13 +30,15 @@ class ConfigLoader:
         self._config = {}
         
         # 1. Default Values
+        # 1. Default Values
         self._config['LOG_LEVEL'] = 'INFO'
-        self._config['DB_PATH'] = 'trade.db'
+        from core.utils import get_db_path
+        self._config['DB_PATH'] = get_db_path()
         self._config['KIWOOM_API_URL'] = 'https://openapi.kiwoom.com/openapi/v1'
         self._config['KIWOOM_WS_URL'] = 'wss://openapi.kiwoom.com/websocket/v1'
         self._config['MOCK_MODE'] = False
 
-        # 2. Load YAML (config/settings.yaml)
+        # 2. Load YAML (config/settings.yaml) - Read Only Template
         yaml_path = os.path.join(root_dir, 'config', 'settings.yaml')
         if os.path.exists(yaml_path):
             try:
@@ -44,19 +49,29 @@ class ConfigLoader:
             except Exception as e:
                 print(f"Warning: Failed to load settings.yaml: {e}")
 
-        # 3. Load JSON (config/settings.json)
-        json_path = os.path.join(root_dir, 'config', 'settings.json')
-        if os.path.exists(json_path):
+        # 3. Load Local JSON (config/settings.json) - Read Only Template
+        local_json_path = os.path.join(root_dir, 'config', 'settings.json')
+        if os.path.exists(local_json_path):
             try:
-                with open(json_path, 'r', encoding='utf-8') as f:
+                with open(local_json_path, 'r', encoding='utf-8') as f:
                     json_config = json.load(f)
                     if json_config:
                         self._config.update(json_config)
             except Exception as e:
-                print(f"Warning: Failed to load settings.json: {e}")
+                print(f"Warning: Failed to load local settings.json: {e}")
         
-        # 4. Load Environment Variables (Override)
-        # List of keys to check in Env Vars
+        # 4. Load User JSON (AppData/PainTrader/settings.json) - Writable
+        user_json_path = get_config_path()
+        if os.path.exists(user_json_path):
+            try:
+                with open(user_json_path, 'r', encoding='utf-8') as f:
+                    user_config = json.load(f)
+                    if user_config:
+                        self._config.update(user_config)
+            except Exception as e:
+                print(f"Warning: Failed to load user settings.json: {e}")
+        
+        # 5. Load Environment Variables (Override)
         env_keys = [
             'KIWOOM_APP_KEY', 'KIWOOM_SECRET_KEY', 'ACCOUNT_NO', 
             'KAKAO_APP_KEY', 'KAKAO_ACCESS_TOKEN', 'KAKAO_REFRESH_TOKEN', 
@@ -77,23 +92,19 @@ class ConfigLoader:
     def set(self, key, value):
         self._config[key] = value
         # Note: This does not persist to .env file automatically. 
-        # Persistence logic would be needed if we want to save changes.
 
     def save(self, key, value):
         """
-        Update config and persist to config/settings.json.
+        Update config and persist to AppData/PainTrader/settings.json.
         """
         self.set(key, value)
         self.save_to_file()
 
     def save_to_file(self):
         """
-        Save current configuration to config/settings.json.
-        Note: This attempts to isolate settings from environment variables to avoid saving secrets.
-        However, for simplicity in this version, we will load the existing JSON, update it, and save it back.
+        Save current configuration to AppData/PainTrader/settings.json.
         """
-        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        json_path = os.path.join(root_dir, 'config', 'settings.json')
+        json_path = get_config_path()
         
         # Load existing JSON to preserve structure if possible
         current_json = {}
@@ -102,13 +113,7 @@ class ConfigLoader:
                 with open(json_path, 'r', encoding='utf-8') as f:
                     current_json = json.load(f)
             except Exception as e:
-                print(f"Warning: Failed to read existing settings.json: {e}")
-        
-        # Update with current in-memory config, BUT filter out known sensitive env vars if they are not in the original JSON
-        # Actually, a safer approach is: We only save what is explicitly set via 'save()'.
-        # But 'save_to_file' implies saving the state.
-        # Let's take a hybrid approach: We assume 'save()' is called for specific settings (like UI params).
-        # We will iterate over self._config and save keys that are NOT in the sensitive list.
+                print(f"Warning: Failed to read existing user settings.json: {e}")
         
         sensitive_keys = [
             'KIWOOM_APP_KEY', 'KIWOOM_SECRET_KEY', 'ACCOUNT_NO', 
@@ -121,9 +126,6 @@ class ConfigLoader:
                 current_json[k] = v
                 
         try:
-            # Ensure directory exists
-            os.makedirs(os.path.dirname(json_path), exist_ok=True)
-            
             with open(json_path, 'w', encoding='utf-8') as f:
                 json.dump(current_json, f, indent=4, ensure_ascii=False)
         except Exception as e:

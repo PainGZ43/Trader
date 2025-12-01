@@ -98,6 +98,19 @@ class BaseStrategy(StrategyInterface):
     """
     Base Strategy Implementation with common functionality.
     """
+    @classmethod
+    def get_parameter_schema(cls) -> Dict[str, Dict[str, Any]]:
+        """
+        Define tunable parameters for the strategy.
+        Returns a dictionary where key is parameter name and value is metadata.
+        Example:
+        {
+            "rsi_period": {"type": "int", "min": 5, "max": 30, "default": 14, "desc": "RSI Period"},
+            "stop_loss_pct": {"type": "float", "min": 0.5, "max": 5.0, "default": 2.0, "desc": "Stop Loss %"}
+        }
+        """
+        return {}
+
     def __init__(self, strategy_id: str, symbol: str):
         self.logger = get_logger(f"Strategy_{strategy_id}")
         self.strategy_id = strategy_id

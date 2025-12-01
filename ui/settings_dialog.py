@@ -1,103 +1,69 @@
-from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QLineEdit, 
-                             QPushButton, QHBoxLayout, QMessageBox, QFormLayout)
-from core.secure_storage import secure_storage
-from core.config import config
+from PyQt6.QtWidgets import QDialog, QVBoxLayout, QTabWidget, QPushButton, QHBoxLayout, QMessageBox
+from ui.widgets.settings_tabs import AccountSettingsTab, StrategySettingsTab, RiskSettingsTab, SystemSettingsTab
 
 class SettingsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Settings")
-        self.resize(400, 300)
+        self.setWindowTitle("Settings & Management")
+        self.resize(800, 600)
         self.init_ui()
-        self.load_settings()
 
     def init_ui(self):
         layout = QVBoxLayout(self)
-
-        # Form Layout for Inputs
-        form_layout = QFormLayout()
         
-        self.app_key_input = QLineEdit()
-        self.secret_key_input = QLineEdit()
-        self.secret_key_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.account_input = QLineEdit()
+        # Tabs
+        self.tabs = QTabWidget()
+        self.tab_account = AccountSettingsTab()
+        self.tab_strategy = StrategySettingsTab()
+        self.tab_risk = RiskSettingsTab()
+        self.tab_system = SystemSettingsTab()
         
-        form_layout.addRow("Kiwoom App Key:", self.app_key_input)
-        form_layout.addRow("Kiwoom Secret Key:", self.secret_key_input)
-        form_layout.addRow("Account No:", self.account_input)
+        self.tabs.addTab(self.tab_account, "Accounts & API")
+        self.tabs.addTab(self.tab_strategy, "Strategy Tuning")
+        self.tabs.addTab(self.tab_risk, "Risk & Notification")
+        self.tabs.addTab(self.tab_system, "System Health")
         
-        layout.addLayout(form_layout)
-
+        layout.addWidget(self.tabs)
+        
         # Buttons
         btn_layout = QHBoxLayout()
-        save_btn = QPushButton("Save")
-        save_btn.clicked.connect(self.save_settings)
-        cancel_btn = QPushButton("Cancel")
-        cancel_btn.clicked.connect(self.reject)
+        self.btn_save = QPushButton("Save All")
+        self.btn_save.clicked.connect(self.save_all)
+        self.btn_cancel = QPushButton("Close")
+        self.btn_cancel.clicked.connect(self.reject)
         
-        btn_layout.addWidget(save_btn)
-        btn_layout.addWidget(cancel_btn)
+        btn_layout.addStretch()
+        btn_layout.addWidget(self.btn_save)
+        btn_layout.addWidget(self.btn_cancel)
         layout.addLayout(btn_layout)
-
+        
         # Style
         self.setStyleSheet("""
-            QDialog {
-                background-color: #2b2b2b;
-                color: white;
-            }
-            QLabel {
-                color: white;
-                font-weight: bold;
-            }
-            QLineEdit {
-                padding: 5px;
-                border: 1px solid #555;
-                border-radius: 4px;
-                background-color: #1e1e1e;
-                color: white;
-            }
-            QPushButton {
-                padding: 8px 15px;
-                background-color: #3498db;
-                color: white;
-                border: none;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
+            QDialog { background-color: #2b2b2b; color: white; }
+            QTabWidget::pane { border: 1px solid #444; }
+            QTabBar::tab { background: #333; color: #aaa; padding: 8px 12px; }
+            QTabBar::tab:selected { background: #444; color: white; border-bottom: 2px solid #3498db; }
+            QPushButton { padding: 8px 15px; background-color: #3498db; color: white; border: none; border-radius: 4px; }
+            QPushButton:hover { background-color: #2980b9; }
+            QLabel { color: white; }
+            QLineEdit, QSpinBox, QComboBox { padding: 5px; background-color: #1e1e1e; color: white; border: 1px solid #555; }
         """)
 
-    def load_settings(self):
-        # Load from SecureStorage first, then Config
-        app_key = secure_storage.get("KIWOOM_APP_KEY") or config.get("KIWOOM_APP_KEY", "")
-        secret_key = secure_storage.get("KIWOOM_SECRET_KEY") or config.get("KIWOOM_SECRET_KEY", "")
-        account = secure_storage.get("ACCOUNT_NO") or config.get("ACCOUNT_NO", "")
+    def save_all(self):
+        # Save All Tabs
+        self.tab_account.save_settings()
+        self.tab_strategy.save_settings()
+        self.tab_risk.save_settings()
+        restart_required = self.tab_system.save_settings()
         
-        self.app_key_input.setText(app_key)
-        self.secret_key_input.setText(secret_key)
-        self.account_input.setText(account)
-
-    def save_settings(self):
-        app_key = self.app_key_input.text().strip()
-        secret_key = self.secret_key_input.text().strip()
-        account = self.account_input.text().strip()
-        
-        if not app_key or not secret_key:
-            QMessageBox.warning(self, "Input Error", "App Key and Secret Key are required.")
-            return
-
-        try:
-            secure_storage.save("KIWOOM_APP_KEY", app_key)
-            secure_storage.save("KIWOOM_SECRET_KEY", secret_key)
-            secure_storage.save("ACCOUNT_NO", account)
+        if restart_required:
+            from core.language import language_manager
+            QMessageBox.information(
+                self, 
+                language_manager.get_text("msg_restart_title"), 
+                language_manager.get_text("msg_restart_body")
+            )
+        else:
+            QMessageBox.information(self, "Saved", "All settings have been saved successfully.")
             
-            # Update runtime config as well (optional but good for immediate effect if config is used)
-            config.set("KIWOOM_APP_KEY", app_key)
-            config.set("KIWOOM_SECRET_KEY", secret_key)
-            config.set("ACCOUNT_NO", account)
-            
-            QMessageBox.information(self, "Success", "Settings saved successfully.\nPlease restart the application for changes to take full effect.")
-            self.accept()
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to save settings: {e}")
+        self.accept()

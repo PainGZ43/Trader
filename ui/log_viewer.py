@@ -29,15 +29,40 @@ class LogViewer(QWidget):
 
         # Filter Bar
         filter_layout = QHBoxLayout()
+import logging
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPlainTextEdit, QComboBox, QHBoxLayout, QLabel, QLineEdit, QCheckBox, QPushButton
+from PyQt6.QtCore import Qt, pyqtSignal, QObject
+from PyQt6.QtGui import QFont
+
+class LogSignalHandler(logging.Handler, QObject):
+    """
+    Custom logging handler that emits a signal when a log record is created.
+    """
+    log_signal = pyqtSignal(str, int) # message, levelno
+
+    def __init__(self):
+        super().__init__()
+        QObject.__init__(self)
+
+    def emit(self, record):
+        msg = self.format(record)
+        self.log_signal.emit(msg, record.levelno)
+
+class LogViewer(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.init_ui()
+        self.setup_logging()
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        # Filter Bar
+        filter_layout = QHBoxLayout()
         self.level_combo = QComboBox()
         self.level_combo.addItems(["ALL", "INFO", "WARNING", "ERROR"])
         self.level_combo.currentTextChanged.connect(self.filter_logs)
-        
-        filter_layout.addWidget(QLabel("Log Level:"))
-        filter_layout.addWidget(self.level_combo)
-        filter_layout.addStretch()
-        
-        layout.addLayout(filter_layout)
 
         # Log Text Area
         self.text_edit = QPlainTextEdit()
@@ -67,6 +92,9 @@ class LogViewer(QWidget):
         # Simple HTML formatting for color
         html_msg = f'<span style="color:{color};">{msg}</span>'
         self.text_edit.appendHtml(html_msg)
+        
+        if self.chk_auto_scroll.isChecked():
+            self.text_edit.verticalScrollBar().setValue(self.text_edit.verticalScrollBar().maximum())
 
     def filter_logs(self, text):
         # Note: This is a visual filter for future logs or we could implement a model-based filter.
@@ -78,3 +106,33 @@ class LogViewer(QWidget):
             "ERROR": logging.ERROR
         }
         self.handler.setLevel(level_map.get(text, logging.INFO))
+
+    def search_logs(self, text):
+        # Basic highlighting or filtering could be complex in QPlainTextEdit without a model.
+        # For this version, we will just highlight the text if found.
+        if not text:
+            return
+            
+        cursor = self.text_edit.textCursor()
+        # Reset selection
+        cursor.clearSelection()
+        self.text_edit.setTextCursor(cursor)
+        
+        if self.text_edit.find(text):
+            # Found
+            pass
+        else:
+            # Not found, maybe reset cursor to start and search again
+            self.text_edit.moveCursor(self.text_edit.textCursor().MoveOperation.Start)
+            if self.text_edit.find(text):
+                pass
+
+    def save_logs_to_file(self):
+        from PyQt6.QtWidgets import QFileDialog
+        filename, _ = QFileDialog.getSaveFileName(self, "Save Log File", "", "Text Files (*.txt);;All Files (*)")
+        if filename:
+            try:
+                with open(filename, 'w', encoding='utf-8') as f:
+                    f.write(self.text_edit.toPlainText())
+            except Exception as e:
+                print(f"Failed to save logs: {e}")

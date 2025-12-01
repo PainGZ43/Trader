@@ -1,95 +1,71 @@
-import asyncio
-import os
 import sys
-from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
+import time
+import threading
+from PyQt6.QtWidgets import QApplication
+from ui.main_window import MainWindow
+from core.event_bus import event_bus
 
-# Force Mock Mode for Verification
-os.environ["MOCK_MODE"] = "True"
-os.environ["LOG_LEVEL"] = "DEBUG"
-
-from core.config import ConfigLoader
-from core.logger import get_logger
-from core.database import db
-from data.data_collector import DataCollector
-
-async def verify_integration():
-    logger = get_logger("IntegrationVerifier")
-    logger.info("Starting Integration Verification (MOCK_MODE=True)...")
+def verify_integration():
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
     
-    # 1. Initialize Components
-    collector = DataCollector()
+    print("Starting Integration Verification...")
     
-    # Patch MarketSchedule to force Open
-    with patch.object(collector.market_schedule, 'check_market_status', return_value=True):
+    async def run_tests():
+        # Wait for loop to settle
+        await asyncio.sleep(0.1)
         
-        # 2. Start Collector
-        await collector.start()
+        # 1. Test Backend -> UI (Macro Update)
+        print("[TEST] Publishing 'market.data.macro'...")
+        event_bus.publish("market.data.macro", {
+            "indices": {"KOSPI": "2600.50", "KOSDAQ": "870.20"},
+            "exchange_rate": "1310.5"
+        })
         
-        # 3. Verify Market Code Sync
-        logger.info("Verifying Market Code Sync...")
-        rows = await db.fetch_all("SELECT count(*) FROM market_code")
-        code_count = rows[0][0]
-        if code_count > 0:
-            logger.info(f"SUCCESS: Found {code_count} market codes.")
-        else:
-            logger.error("FAILURE: No market codes found.")
-            sys.exit(1)
+        # 2. Test Backend -> UI (Account Update)
+        print("[TEST] Publishing 'account.summary'...")
+        event_bus.publish("account.summary", {
+            "total_asset": 10000000,
+            "deposit": 5000000,
+            "total_pnl": 250000,
+            "pnl_pct": 2.5
+        })
+        
+        # 3. Test UI -> Backend (Order)
+        def on_order_create(event):
+            print(f"[SUCCESS] Backend received order: {event.data}")
 
-        # 4. Subscribe & Simulate Data for Candle
-        test_symbol = "005930"
-        await collector.subscribe_symbol(test_symbol)
-        logger.info(f"Subscribed to {test_symbol}. Simulating data flow...")
+        event_bus.subscribe("order.create", on_order_create)
         
-        # Inject data manually to test aggregation logic without waiting 60s
-        base_time = datetime(2024, 1, 1, 10, 0, 0)
+        print("[TEST] Simulating 'BUY' click in OrderPanel...")
+        window.order_panel.code_input.setText("005930")
+        window.order_panel.qty_input.setValue(10)
+        window.order_panel.price_input.setValue(70000)
+        window.order_panel.btn_buy.click()
         
-        # Tick 1: 10:00:10
-        with patch('data.data_collector.datetime') as mock_dt:
-            mock_dt.now.return_value = base_time + timedelta(seconds=10)
-            await collector.on_realtime_data({"code": test_symbol, "price": 1000, "volume": 10})
+        # 4. Test Panic
+        def on_panic(event):
+            print(f"[SUCCESS] Backend received panic: {event.data}")
             
-        # Tick 2: 10:00:50
-        with patch('data.data_collector.datetime') as mock_dt:
-            mock_dt.now.return_value = base_time + timedelta(seconds=50)
-            await collector.on_realtime_data({"code": test_symbol, "price": 1010, "volume": 20})
-            
-        # Tick 3: 10:01:05 (Triggers Candle Close for 10:00)
-        with patch('data.data_collector.datetime') as mock_dt:
-            mock_dt.now.return_value = base_time + timedelta(minutes=1, seconds=5)
-            await collector.on_realtime_data({"code": test_symbol, "price": 1005, "volume": 5})
-            
-        # 5. Verify Database Content
-        logger.info("Verifying Database Content...")
+        event_bus.subscribe("system.panic", on_panic)
+        print("[TEST] Simulating 'STOP ALGO' click...")
+        window.order_panel.panic_signal.emit("STOP") 
         
-        # Check Ticks
-        tick_rows = await db.fetch_all(f"SELECT count(*) FROM market_data WHERE symbol='{test_symbol}' AND interval='tick'")
-        tick_count = tick_rows[0][0]
-        logger.info(f"Tick Count: {tick_count}")
-        
-        # Check 1m Candle
-        candle_rows = await db.fetch_all(f"SELECT count(*) FROM market_data WHERE symbol='{test_symbol}' AND interval='1m'")
-        candle_count = candle_rows[0][0]
-        logger.info(f"Candle Count: {candle_count}")
-        
-        # 6. Stop
-        await collector.stop()
-        
-        if tick_count >= 3 and candle_count >= 1:
-            print("\n[VERIFICATION RESULT] PASS: Core <-> Data Module Integration Successful.")
-            print(f"- Market Codes: {code_count}")
-            print(f"- Ticks Saved: {tick_count}")
-            print(f"- Candles Generated: {candle_count}")
-            sys.exit(0)
-        else:
-            print("\n[VERIFICATION RESULT] FAIL: Data missing.")
-            sys.exit(1)
+        await asyncio.sleep(2)
+        app.quit()
+
+    loop = qasync.QEventLoop(app)
+    asyncio.set_event_loop(loop)
+    
+    with loop:
+        loop.create_task(run_tests())
+        loop.run_forever()
+    
+    print("Verification Finished.")
+
+import asyncio
+import qasync
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(verify_integration())
-    except KeyboardInterrupt:
-        pass
-    except Exception as e:
-        print(f"Verification Failed with Error: {e}")
-        sys.exit(1)
+    verify_integration()

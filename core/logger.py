@@ -3,6 +3,7 @@ import os
 import sys
 from logging.handlers import RotatingFileHandler
 from colorama import Fore, Style, init
+from core.utils import get_log_dir
 
 # Initialize colorama
 init(autoreset=True)
@@ -53,9 +54,7 @@ class Logger:
         return cls._instance
 
     def _initialize(self):
-        self.log_dir = "logs"
-        if not os.path.exists(self.log_dir):
-            os.makedirs(self.log_dir)
+        self.log_dir = get_log_dir()
         
         # Default level
         self.level = logging.INFO
@@ -91,10 +90,11 @@ class Logger:
         logger.setLevel(self.level)
         logger.propagate = False  # Prevent double logging
 
-        # Console Handler
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setFormatter(CustomFormatter())
-        logger.addHandler(console_handler)
+        # Console Handler (Safe Check)
+        if sys.stdout:
+            console_handler = logging.StreamHandler(sys.stdout)
+            console_handler.setFormatter(CustomFormatter())
+            logger.addHandler(console_handler)
 
         # File Handler (Rotating)
         file_handler = RotatingFileHandler(
