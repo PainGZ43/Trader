@@ -10,7 +10,7 @@ import threading
 import asyncio
 
 # Configuration
-APP_KEY = "60371040fc940138725aec7013a905c7"
+APP_KEY = "YOUR_REST_API_KEY" # Replace with your actual REST API Key
 REDIRECT_URI = "http://localhost:5000" # Must match Kakao Developers setting
 PORT = 5000
 

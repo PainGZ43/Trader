@@ -211,12 +211,46 @@ class OrderManager:
         self.logger.warning("Cancelling ALL active orders...")
         if not self.active_orders:
             self.logger.info("No active orders to cancel.")
-            return
+        else:
+            order_ids = list(self.active_orders.keys())
+            for oid in order_ids:
+                info = self.active_orders[oid]
+                await self.cancel_order(oid, info['symbol'])
+            
+    async def close_all_positions(self):
+        """
+        Liquidate all holding positions (Panic Sell).
+        """
+        self.logger.warning("CLOSING ALL POSITIONS (Panic Liquidation)...")
+        try:
+            # 1. Get Balance/Positions
+            balance = await self.kiwoom.get_account_balance()
+            if not balance:
+                self.logger.error("Failed to get balance for liquidation.")
+                return
 
-        order_ids = list(self.active_orders.keys())
-        for oid in order_ids:
-            info = self.active_orders[oid]
-            await self.cancel_order(oid, info['symbol'])
+            # Parse positions
+            # Output format depends on KiwoomRestClient implementation (mock/real)
+            # Based on mock: {'output': {'multi': [{'code': '...', 'qty': '...'}]}}
+            positions = []
+            output = balance.get('output', {})
+            if 'multi' in output:
+                positions = output['multi']
+            elif 'single' in output: # Sometimes single list?
+                pass 
+            
+            # 2. Sell Each
+            for pos in positions:
+                symbol = pos.get('code')
+                qty = int(pos.get('qty', 0))
+                if qty > 0:
+                    self.logger.warning(f"Liquidating {symbol}: {qty} shares")
+                    # Send Market Sell Order
+                    # trade_type=2 (Sell), quote_type=03 (Market)
+                    await self.kiwoom.send_order(symbol, 2, qty, 0, "03")
+                    
+        except Exception as e:
+            self.logger.error(f"Panic Liquidation Failed: {e}")
             
     async def on_order_event(self, event_data: Dict[str, Any]):
         """

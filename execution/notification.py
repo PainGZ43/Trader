@@ -19,8 +19,13 @@ class NotificationManager:
         self.logger = get_logger("NotificationManager")
         
         # Config
-        self.kakao_token = config.get("KAKAO_ACCESS_TOKEN")
-        self.refresh_token = config.get("KAKAO_REFRESH_TOKEN")
+        from core.secure_storage import secure_storage
+        
+        # Load from SecureStorage (Priority) or Config (Fallback)
+        self.kakao_app_key = secure_storage.get("kakao_app_key") or config.get("KAKAO_APP_KEY")
+        self.kakao_token = secure_storage.get("kakao_access_token") or config.get("KAKAO_ACCESS_TOKEN")
+        self.refresh_token = secure_storage.get("kakao_refresh_token") or config.get("KAKAO_REFRESH_TOKEN")
+        
         self.enabled = bool(self.kakao_token)
         self.notify_level = config.get("NOTIFY_LEVEL", "ALL") # ALL, ERROR_ONLY, NONE
         
@@ -186,7 +191,7 @@ class NotificationManager:
         url = "https://kauth.kakao.com/oauth/token"
         data = {
             "grant_type": "refresh_token",
-            "client_id": config.get("KAKAO_APP_KEY"), # REST API Key
+            "client_id": self.kakao_app_key, # Use loaded key
             "refresh_token": self.refresh_token
         }
         
@@ -196,11 +201,14 @@ class NotificationManager:
                     if resp.status == 200:
                         result = await resp.json()
                         self.kakao_token = result.get("access_token")
-                        config.save("KAKAO_ACCESS_TOKEN", self.kakao_token)
+                        
+                        # Save to SecureStorage
+                        from core.secure_storage import secure_storage
+                        secure_storage.save("kakao_access_token", self.kakao_token)
                         
                         if "refresh_token" in result:
                             self.refresh_token = result.get("refresh_token")
-                            config.save("KAKAO_REFRESH_TOKEN", self.refresh_token)
+                            secure_storage.save("kakao_refresh_token", self.refresh_token)
                         
                         self.logger.info("Kakao Token Refreshed Successfully")
                         return True

@@ -117,3 +117,61 @@ QProgressBar {
 QProgressBar::chunk {
     background-color: #007acc;
 }
+
+/* Input Fields */
+QLineEdit {
+    background-color: #2d2d2d;
+    border: 1px solid #3e3e42;
+    padding: 5px;
+    color: #ffffff;
+    border-radius: 4px;
+}
+
+QLineEdit:focus {
+    border: 1px solid #007acc;
+}
+
+/* GroupBox */
+QGroupBox {
+    border: 1px solid #555555;
+    border-radius: 4px;
+    margin-top: 20px; /* Increased margin for title */
+    padding-top: 10px;
+    font-weight: bold;
+    color: #ffffff; /* Pure white for text */
+    background-color: #252526; /* Slightly lighter background */
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 5px;
+    left: 10px;
+    color: #007acc; /* Accent color for title */
+    background-color: #1e1e1e; /* Match parent bg to cover border */
+}
+
+/* Radio Button & CheckBox */
+QRadioButton, QCheckBox {
+    spacing: 8px;
+    color: #ffffff;
+    font-size: 14px;
+}
+
+QRadioButton::indicator, QCheckBox::indicator {
+    width: 18px;
+    height: 18px;
+    border: 1px solid #555555;
+    border-radius: 9px; /* Circular */
+    background-color: #2d2d2d;
+}
+
+QRadioButton::indicator:checked {
+    background-color: #007acc;
+    border: 1px solid #007acc;
+}
+
+QRadioButton::indicator:unchecked:hover {
+    border: 1px solid #007acc;
+}
+

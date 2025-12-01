@@ -45,10 +45,17 @@ class RiskManager:
         now = datetime.now()
         self._clean_order_window(now)
         if len(self.order_count_window) >= self.config["max_order_count_per_min"]:
-            msg = "Risk Check Failed: Max order count per minute exceeded."
-            self.logger.warning(msg)
+            msg_content = "분당 주문 횟수 초과"
+            self.logger.warning(msg_content)
             # Fire alert (fire and forget)
             try:
+                msg = (
+                    f"⚠️ [리스크 경고]\n"
+                    f"{msg_content}\n\n"
+                    f"• 제한: {self.config['max_order_count_per_min']}회/분\n"
+                    f"• 현재: {len(self.order_count_window)}회\n"
+                    f"• 조치: 주문 거부"
+                )
                 loop = asyncio.get_running_loop()
                 loop.create_task(self._fire_alert(msg))
             except:
@@ -63,11 +70,18 @@ class RiskManager:
         if loss_rate > self.config["max_daily_loss_rate"]:
             # Only block entry (BUY), allow exit (SELL)
             if signal.type == "BUY":
-                msg = f"Risk Check Failed: Daily loss limit exceeded ({loss_rate*100:.2f}% > {self.config['max_daily_loss_rate']*100:.2f}%)"
-                self.logger.warning(msg)
+                msg_content = "일일 손실 한도 초과"
+                self.logger.warning(msg_content)
                 try:
+                    msg = (
+                        f"⚠️ [리스크 경고]\n"
+                        f"{msg_content}\n\n"
+                        f"• 제한: {self.config['max_daily_loss_rate']*100:.1f}%\n"
+                        f"• 현재: {loss_rate*100:.2f}%\n"
+                        f"• 조치: 매수 금지"
+                    )
                     loop = asyncio.get_running_loop()
-                    loop.create_task(self._fire_alert(f"🚨 [리스크 경고] {msg}"))
+                    loop.create_task(self._fire_alert(msg))
                 except:
                     pass
                 return False
@@ -81,7 +95,20 @@ class RiskManager:
             # Exposure = (Total Asset - Cash) / Total Asset
             exposure = (total_asset - current_cash) / total_asset
             if exposure > self.config["max_portfolio_exposure"]:
-                self.logger.warning(f"Risk Check Failed: Max portfolio exposure reached ({exposure*100:.2f}%)")
+                msg_content = "포트폴리오 비중 한도 초과"
+                self.logger.warning(msg_content)
+                try:
+                    msg = (
+                        f"⚠️ [리스크 경고]\n"
+                        f"{msg_content}\n\n"
+                        f"• 제한: {self.config['max_portfolio_exposure']*100:.1f}%\n"
+                        f"• 현재: {exposure*100:.2f}%\n"
+                        f"• 조치: 매수 금지"
+                    )
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(self._fire_alert(msg))
+                except:
+                    pass
                 return False
 
         return True

@@ -36,14 +36,51 @@ htmlcov/
 *.db-wal
 
 # Sensitive Data
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+
+# Environment variables
+# Environment variables
+.env
+config/settings.json
+
+# IDE
+.vscode/
+.idea/
+
+# Database
+*.db
+*.sqlite3
+
+# Logs
+logs/
+*.log
+
+# Kiwoom API
+Kiwoom/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Database Temp
+*.db-shm
+*.db-wal
+
+# Sensitive Data
 data/key_metadata.json
 config/settings.yaml
 
 # Utility Scripts (contain keys)
 update_keys.py
 update_real_keys.py
-update_mock_keys.py
-verify_key_manager.py
+update_mock_keyscripts/verify_mock_investment.py
+scripts/scenario_config.py
 test_corrected_keys.py
 debug_expiry.py
-scripts/verify_mock_investment.py

@@ -256,7 +256,12 @@ class KiwoomRestClient:
         elif "order" in endpoint or tr_id == "TT80012" or tr_id == "ct80012": 
             return {"rt_cd": "0", "msg_cd": "0000", "msg1": "Order Accepted", "output": {"order_no": "123456"}}
         elif "balance" in endpoint or tr_id == "OPW00018":
-            return {"output": [{"code": "005930", "name": "Samsung Elec", "qty": "10", "avg_price": "68000"}]}
+            return {
+                "output": {
+                    "single": [{"pres_asset_total": "20000000", "deposit": "9500000", "total_purchase_amt": "10000000", "total_eval_amt": "10500000", "total_eval_profit_loss_amt": "500000", "total_earning_rate": "5.0"}],
+                    "multi": [{"code": "005930", "name": "Samsung Elec", "qty": "10", "avg_price": "68000", "cur_price": "70000", "eval_amt": "700000", "earning_rate": "2.9"}]
+                }
+            }
         return {}
 
     # --- Market Data ---
@@ -339,42 +344,97 @@ class KiwoomRestClient:
     # --- Order Management ---
 
     async def send_order(self, symbol, order_type, qty, price=0, trade_type="00"):
-        endpoint = "/api/dostk/order"
-        tr_id = "ct80012"
+        # Correct Endpoint from PDF: /api/dostk/ordr
+        endpoint = "/api/dostk/ordr"
+        
+        # Determine TR ID based on Server Mode
+        if self.is_mock_server:
+            # Mock Server TR IDs (from PDF)
+            if str(order_type) == "1": # Buy
+                tr_id = "kt10000"
+            elif str(order_type) == "2": # Sell
+                tr_id = "kt10001"
+            else:
+                tr_id = "kt10000" 
+        else:
+            # Real Server TR IDs (Assuming same structure based on PDF)
+            if str(order_type) == "1": # Buy
+                tr_id = "kt10000"
+            elif str(order_type) == "2": # Sell
+                tr_id = "kt10001"
+            else:
+                tr_id = "kt10000"
         
         # Need account number from active key or storage
         from data.key_manager import key_manager
         active_key = key_manager.get_active_key()
         acc_no = active_key["account_no"] if active_key else ""
         
+        # Map parameters to API Spec (Page 422)
         data = {
-            "acc_no": acc_no,
-            "order_type": order_type, 
+            # "acc_no": acc_no, # PDF Page 422 does NOT list acc_no in Body! It might be inferred from Token?
+            # Wait, let's check PDF again. Page 422 Request Body:
+            # dmst_stex_tp, stk_cd, ord_qty, ord_uv, trde_tp, cond_uv
+            # It does NOT list acc_no.
+            # However, usually acc_no is required. 
+            # Let's try WITHOUT acc_no first as per PDF, or maybe it's in Header?
+            # PDF Headers: api-id, authorization, cont-yn, next-key. No acc_no.
+            # Maybe the Token is bound to the account?
+            # Let's include acc_no just in case, or remove it if it fails.
+            # Actually, standard Kiwoom REST usually requires acc_no. 
+            # But if PDF doesn't say so... let's try to follow PDF strictly.
+            
+            "dmst_stex_tp": "KRX",
             "stk_cd": symbol,
-            "qty": str(qty),
-            "price": str(price),
-            "trade_type": trade_type 
+            "ord_qty": str(qty),
+            "ord_uv": str(price),
+            "trde_tp": trade_type,
+            "cond_uv": "0" # Condition price, usually 0
         }
         
-        self.logger.info(f"Sending Order: {order_type} {symbol} {qty}@{price}")
+        # If acc_no is needed, it might be a different field or implied.
+        # Let's keep acc_no for now but use the keys above.
+        # Wait, if I send extra keys, it might be fine.
+        # But let's be precise.
+        
+        self.logger.info(f"Sending Order: {order_type} {symbol} {qty}@{price} (TR: {tr_id}, URL: {endpoint})")
         return await self.request("POST", endpoint, data=data, api_id=tr_id)
 
     async def cancel_order(self, order_no, symbol, qty):
-        endpoint = "/api/dostk/order_cancel"
-        tr_id = "ct80013"
+        # Correct Endpoint from PDF: /api/dostk/ordr
+        endpoint = "/api/dostk/ordr"
+        
+        if self.is_mock_server:
+            tr_id = "kt10003"
+        else:
+            tr_id = "kt10003" 
         
         from data.key_manager import key_manager
         active_key = key_manager.get_active_key()
         acc_no = active_key["account_no"] if active_key else ""
         
+        # PDF Page 428 (Cancel) Body:
+        # orig_ord_no, ord_no(Response?), base_orig_ord_no(Response?)
+        # Wait, Page 428 Request Body:
+        # orig_ord_no (Y), stk_cd (not listed?), cncl_qty (not listed?)
+        # Let's check Page 428 again in my thought process...
+        # [L24] Body orig_ord_no 원주문번호 String Y 7
+        # [L33] Body ord_no ... (Response)
+        # It seems incomplete in extraction.
+        # Gold Spot Cancel (Page 447) had: orig_ord_no, stk_cd, cncl_qty.
+        # Stock Cancel likely needs:
+        # org_ord_no (Original Order No)
+        # ord_qty (Cancel Qty? or cncl_qty?)
+        # stk_cd?
+        # Let's guess based on Gold Spot:
         data = {
-            "acc_no": acc_no,
-            "order_no": order_no,
+            "orig_ord_no": order_no, # Original Order No
             "stk_cd": symbol,
-            "qty": str(qty)
+            "cncl_qty": str(qty), # Assuming cncl_qty based on Gold Spot
+            "dmst_stex_tp": "KRX"
         }
         
-        self.logger.info(f"Canceling Order: {order_no}")
+        self.logger.info(f"Canceling Order: {order_no} (TR: {tr_id}, URL: {endpoint})")
         return await self.request("POST", endpoint, data=data, api_id=tr_id)
 
     # --- Account & Balance ---

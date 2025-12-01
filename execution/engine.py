@@ -143,10 +143,11 @@ class ExecutionEngine:
             # Assuming we just stop adding new tasks or ignore signals.
             pass
             
-        # 2. Cancel All Orders
+        # 2. Cancel All Orders & Liquidate
         if panic:
             await self.order_manager.cancel_all_orders()
-            await self.notification_manager.send_message("🚨 [긴급 정지] 모든 주문을 취소하고 트레이딩을 중단합니다.", level="WARNING")
+            await self.order_manager.close_all_positions()
+            await self.notification_manager.send_message("🚨 [긴급 정지] 모든 주문 취소 및 전량 청산을 시도합니다.", level="WARNING")
         else:
             await self.notification_manager.send_message("🛑 [시스템] 트레이딩을 중단합니다.", level="INFO")
 
@@ -240,7 +241,20 @@ class ExecutionEngine:
             self.logger.info(f"Signal Executed. Order ID: {order_id}")
             
             # Send Notification
-            msg = f"🚀 [주문 접수] {signal.symbol}\n{signal.type} {quantity}주 @ {signal.price:,.0f}원"
+            # Premium Spec:
+            # 🚀 [주문 접수]
+            # 종목명 (종목코드)
+            #
+            # • 주문: 매수 10주 @ 60,000원
+            # • 전략: 변동성돌파
+            total_amt = quantity * signal.price
+            msg = (
+                f"🚀 [주문 접수]\n"
+                f"{signal.symbol} ({signal.symbol})\n\n"
+                f"• 주문: {signal.type} {quantity}주 @ {signal.price:,.0f}원\n"
+                f"• 총액: {total_amt:,.0f}원\n"
+                f"• 전략: {signal.strategy_id if hasattr(signal, 'strategy_id') else 'Unknown'}"
+            )
             await self.notification_manager.send_message(msg)
         else:
             self.logger.error("Signal Execution Failed")

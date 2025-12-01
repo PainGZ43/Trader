@@ -1,23 +1,15 @@
 {
     "keys": [
         {
-            "uuid": "a2e4c113-94cb-44a7-8314-2ac83c7cfdb3",
-            "owner": "Test Mock",
+            "uuid": "d8506d76-3735-42d6-a2f3-a0c93ae900bd",
+            "owner": "SystemTest",
             "type": "MOCK",
-            "account_no": "81153579",
-            "expiry_date": "2025-11-26",
-            "created_at": "2025-11-23T23:04:29.262892"
-        },
-        {
-            "uuid": "2a049b4c-6f2f-46ff-a5cd-83b78f42f6e0",
-            "owner": "Test Real",
-            "type": "REAL",
-            "account_no": "55480828",
-            "expiry_date": "2025-11-26",
-            "created_at": "2025-11-25T00:33:15.543729"
+            "account_no": "12345678",
+            "expiry_date": "20251231",
+            "created_at": "2025-12-01T13:26:31.639739"
         }
     ],
-    "active_key_uuid": "a2e4c113-94cb-44a7-8314-2ac83c7cfdb3",
+    "active_key_uuid": "d8506d76-3735-42d6-a2f3-a0c93ae900bd",
     "expiry_alert_days": 14,
     "auto_login_enabled": true
 }

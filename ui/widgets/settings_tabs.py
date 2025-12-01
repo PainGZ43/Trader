@@ -190,44 +190,155 @@ class RiskSettingsTab(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        layout = QFormLayout(self)
+        layout = QVBoxLayout(self)
+        
+        # Risk Parameters Group
+        risk_group = QGroupBox("Risk Management")
+        risk_layout = QFormLayout()
         
         self.max_loss = QSpinBox()
         self.max_loss.setRange(0, 100)
         self.max_loss.setSuffix("%")
-        self.max_loss.setValue(config.get("risk.max_loss_pct", 3))
-        layout.addRow("Max Daily Loss:", self.max_loss)
+        self.max_loss.setValue(int(config.get("risk.max_loss_pct", 3)))
+        risk_layout.addRow("Max Daily Loss:", self.max_loss)
         
         self.max_pos = QSpinBox()
         self.max_pos.setRange(0, 100)
         self.max_pos.setSuffix("%")
-        self.max_pos.setValue(config.get("risk.max_position_pct", 10))
-        layout.addRow("Max Position Size:", self.max_pos)
+        self.max_pos.setValue(int(config.get("risk.max_position_pct", 10)))
+        risk_layout.addRow("Max Position Size:", self.max_pos)
         
-        layout.addRow(QLabel("<b>Notifications</b>"))
+        risk_group.setLayout(risk_layout)
+        layout.addWidget(risk_group)
         
-        self.kakao_token = QLineEdit()
-        # Load from SecureStorage
-        token = secure_storage.get("kakao_token")
-        if token:
-            self.kakao_token.setText(token)
+        # Kakao Notification Group
+        kakao_group = QGroupBox("KakaoTalk Notification")
+        kakao_layout = QFormLayout()
+        
+        # 1. REST API Key
+        self.kakao_app_key = QLineEdit()
+        self.kakao_app_key.setEchoMode(QLineEdit.EchoMode.Password)
+        app_key = secure_storage.get("kakao_app_key") or config.get("KAKAO_APP_KEY", "")
+        self.kakao_app_key.setText(app_key)
+        kakao_layout.addRow("REST API Key:", self.kakao_app_key)
+        
+        # 2. Auth Code Flow
+        btn_guide = QPushButton("1. Login & Get Code")
+        btn_guide.clicked.connect(self.open_kakao_login)
+        kakao_layout.addRow("", btn_guide)
+        
+        self.auth_code = QLineEdit()
+        self.auth_code.setPlaceholderText("Paste the code from the redirect URL here")
+        kakao_layout.addRow("Auth Code:", self.auth_code)
+        
+        btn_exchange = QPushButton("2. Generate Tokens")
+        btn_exchange.clicked.connect(self.exchange_token)
+        kakao_layout.addRow("", btn_exchange)
+        
+        # 3. Tokens
+        self.access_token = QLineEdit()
+        self.access_token.setEchoMode(QLineEdit.EchoMode.Password)
+        self.access_token.setReadOnly(False) # Allow manual paste if needed
+        acc_token = secure_storage.get("kakao_access_token") or config.get("KAKAO_ACCESS_TOKEN", "")
+        self.access_token.setText(acc_token)
+        kakao_layout.addRow("Access Token:", self.access_token)
+        
+        self.refresh_token = QLineEdit()
+        self.refresh_token.setEchoMode(QLineEdit.EchoMode.Password)
+        self.refresh_token.setReadOnly(False)
+        ref_token = secure_storage.get("kakao_refresh_token") or config.get("KAKAO_REFRESH_TOKEN", "")
+        self.refresh_token.setText(ref_token)
+        kakao_layout.addRow("Refresh Token:", self.refresh_token)
+        
+        # 4. Test
+        self.btn_test_msg = QPushButton("Send Test Message")
+        self.btn_test_msg.clicked.connect(self.send_test_message)
+        kakao_layout.addRow("", self.btn_test_msg)
+        
+        kakao_group.setLayout(kakao_layout)
+        layout.addWidget(kakao_group)
+        
+        layout.addStretch()
+
+    def open_kakao_login(self):
+        """Open browser for Kakao Login."""
+        app_key = self.kakao_app_key.text().strip()
+        if not app_key:
+            QMessageBox.warning(self, "Error", "Please enter REST API Key first.")
+            return
             
-        self.kakao_token.setEchoMode(QLineEdit.EchoMode.Password)
-        layout.addRow("Kakao Token:", self.kakao_token)
+        import webbrowser
+        # Using default localhost redirect uri
+        url = f"https://kauth.kakao.com/oauth/authorize?client_id={app_key}&redirect_uri=https://localhost:3000&response_type=code"
+        webbrowser.open(url)
+        QMessageBox.information(self, "Guide", 
+            "1. Login in the opened browser.\n"
+            "2. When redirected to localhost (page may fail to load), copy the 'code' parameter from the URL bar.\n"
+            "3. Paste it into the 'Auth Code' field."
+        )
+
+    def exchange_token(self):
+        """Exchange Auth Code for Tokens."""
+        app_key = self.kakao_app_key.text().strip()
+        code = self.auth_code.text().strip()
         
-        self.btn_test_msg = QPushButton("Test Message")
-        layout.addRow("", self.btn_test_msg)
+        if not app_key or not code:
+            QMessageBox.warning(self, "Error", "REST API Key and Auth Code are required.")
+            return
+            
+        import requests
+        url = "https://kauth.kakao.com/oauth/token"
+        data = {
+            "grant_type": "authorization_code",
+            "client_id": app_key,
+            "redirect_uri": "https://localhost:3000",
+            "code": code
+        }
+        
+        try:
+            response = requests.post(url, data=data)
+            if response.status_code == 200:
+                tokens = response.json()
+                self.access_token.setText(tokens.get("access_token"))
+                if "refresh_token" in tokens:
+                    self.refresh_token.setText(tokens.get("refresh_token"))
+                QMessageBox.information(self, "Success", "Tokens generated successfully!")
+            else:
+                QMessageBox.critical(self, "Error", f"Failed to get tokens: {response.text}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Connection Error: {e}")
+
+    def send_test_message(self):
+        """Send a test message using current token."""
+        token = self.access_token.text().strip()
+        if not token:
+            QMessageBox.warning(self, "Error", "No Access Token available.")
+            return
+            
+        import requests
+        url = "https://kapi.kakao.com/v2/api/talk/memo/default/send"
+        headers = {"Authorization": f"Bearer {token}"}
+        data = {
+            "template_object": '{"object_type":"text","text":"🔔 [Test] Kakao Notification Test Message","link":{"web_url":"https://www.kakao.com","mobile_web_url":"https://www.kakao.com"}}'
+        }
+        
+        try:
+            response = requests.post(url, headers=headers, data=data)
+            if response.status_code == 200:
+                QMessageBox.information(self, "Success", "Test message sent!")
+            else:
+                QMessageBox.warning(self, "Failed", f"Failed to send: {response.text}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Connection Error: {e}")
 
     def save_settings(self):
         config.set("risk.max_loss_pct", self.max_loss.value())
         config.set("risk.max_position_pct", self.max_pos.value())
         
-        # Save to SecureStorage
-        token = self.kakao_token.text()
-        if token:
-            secure_storage.save("kakao_token", token)
-        else:
-            secure_storage.delete("kakao_token")
+        # Save Kakao Keys to SecureStorage
+        secure_storage.save("kakao_app_key", self.kakao_app_key.text().strip())
+        secure_storage.save("kakao_access_token", self.access_token.text().strip())
+        secure_storage.save("kakao_refresh_token", self.refresh_token.text().strip())
             
         return False
 

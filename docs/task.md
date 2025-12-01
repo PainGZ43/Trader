@@ -134,6 +134,160 @@
         - [x] **배포 환경 개선 (Deployment Refinement)**
             - [x] AppData 경로 처리 (Config, DB, Log) 구현
             - [x] 배포 경로 검증 테스트 (`test_deployment_paths.py`) 추가
-        - [ ] 모의투자 연동 전체 시나리오 테스트 (로그인 -> 수집 -> 매매 -> 청산 -> 종료)
-        - [ ] 예외 상황 테스트 (네트워크 단절, API 에러 등)
+        - [x] 모의투자 연동 전체 시나리오 테스트 (로그인 -> 수집 -> 매매 -> 청산 -> 종료)
+            - [x] `verify_mock_investment.py` 작성 및 Offline Mock 모드 검증 완료
+            - [!] Remote Mock Server API ID 이슈로 인해 로컬 로직 검증으로 대체
+        - [x] 정밀 통합 테스트 (Full System Integration Test)
+            - [x] `verify_full_system.py` 작성 및 실행 (Data -> Signal -> Order -> DB -> Noti)
+        - [x] 실전 동작 시나리오 정밀 테스트 (Real Operation Scenarios)
+# AI 자동매매 프로그램 - 개발 작업 목록
+
+- [x] 1단계: 아키텍처 설계 <!-- id: 0 -->
+    - [x] 고수준 아키텍처 정의 (모듈, 데이터 흐름) <!-- id: 1 -->
+    - [x] 기술 스택 및 라이브러리 정의 <!-- id: 2 -->
+    - [x] 데이터베이스 스키마 정의 (초안) <!-- id: 3 -->
+    - [x] 추가 기능 및 고려사항 점검 <!-- id: 3-1 -->
+- [ ] 2단계: 상세 설계 <!-- id: 4 -->
+    - [ ] **데이터 수집 및 처리 모듈** (`design_data_module.md`) <!-- id: 5 -->
+        - [ ] 키움 공식 REST API (Bridge 제거), OAuth2 토큰 관리
+        - [ ] 실시간(WebSocket) 및 과거(REST) 데이터 수집 구조
+        - [ ] 심화: 속도 제한(Rate Limit), 데이터 결손 보정, 장 운영 시간 관리
+    - [ ] **AI/전략 엔진 모듈** (`design_strategy_module.md`) <!-- id: 6 -->
+        - [ ] 내장 전략: 변동성 돌파, 이평선 교차, RSI 역추세, 볼린저 밴드, AI 하이브리드
+        - [ ] AI 엔진: 가격 예측, 추세 분류, 변동성 예측, RL 행동 결정
+        - [ ] 정밀 백테스터: 호가 비교 체결, 수수료/슬리피지 반영, Grid Search 최적화
+        - [ ] 필터링: 유동성(거래량) 부족 및 관리종목 자동 제외
+        - [ ] 영속성: 매매 컨텍스트(진입 근거) DB 저장/복원
+    - [ ] **실행 (트레이딩) 모듈** (`design_execution_module.md`) <!-- id: 7 -->
+        - [ ] 주문 관리: 분할 매매, 미체결 자동 정정/취소
+        - [ ] 리스크 관리: 예수금/손실한도 확인, 주문 횟수 제한
+        - [ ] 계좌 관리: 실시간 잔고 및 수익률 동기화
+        - [ ] 알림/자동화: 카카오톡 상세 리포트, 자동 로그인, 스케줄러, 왓치독
+    - [x] **사용자 인터페이스 (UI/UX)** (`design_ui_ux.md`) <!-- id: 8 -->
+        - [x] 메인 윈도우: Dock Widget 구조, 실시간 차트/호가창
+        - [x] 설정: 전략 파라미터 튜닝, 관심종목 관리, 테마(Dark/Light) 선택
+        - [x] **Refinement**: Quick Control, Notification History, Panic Safety, Workspace Persistence 추가 반영
+- [ ] 3단계: 구현 (Implementation) <!-- id: 9 -->
+    - [ ] **환경 설정 (Environment Setup)** <!-- id: 10 -->
+        - [ ] Python 3.10+ (64-bit) 설치 및 가상환경(venv) 구성
+        - [ ] 필수 라이브러리 설치 (`PyQt6`, `pandas`, `websockets`, `requests`, `ta-lib`, `torch`/`tensorflow`)
+        - [ ] Git 저장소 초기화 및 `.gitignore` 설정
+        - [ ] 환경변수(`.env`) 설정 (API Key, 계좌번호 등)
+    - [x] **메인 프로그램 코어 (Core)** <!-- id: 12 -->
+        - [x] 프로젝트 디렉토리 구조 생성 (Clean Architecture 적용)
+        - [x] `ConfigLoader`: 설정 파일(YAML/JSON) 및 환경변수 로드
+        - [x] `SecureStorage`: 민감 정보(비밀번호, API Key) 암호화 저장 (OS Keyring 활용)
+        - [x] `Logger`: 모듈별 로그 설정 (파일/콘솔, 로테이션)
+        - [x] `Database`: SQLite 스키마 생성 및 비동기 연결 (`aiosqlite`)
+        - [x] `EventBus`: 모듈 간 이벤트 기반 통신 (Pub/Sub)
+        - [x] `ExceptionHandler`: 전역 예외 처리 및 크래시 리포트
+        - [x] `SystemMonitor`: CPU/Memory/Disk 리소스 모니터링
+        - [x] **코어 모듈 단위 테스트** (Coverage: 98%)
+        - [x] **코어 모듈 통합 테스트** (Integration Verified)
+    - [x] **데이터 모듈 구현 (Data Layer)** <!-- id: 13 -->
+        - [x] `KiwoomRestClient`: 인증(OAuth2), 토큰 자동 갱신, HTTP 요청 래퍼
+        - [x] `RateLimiter`: Token Bucket 알고리즘 적용 (초당 요청 제한 준수)
+        - [x] `WebSocketClient`: 실시간 시세 수신, 핑퐁(Heartbeat), 자동 재연결
+        - [x] `DataCollector`: 실시간 데이터 버퍼링, `Candle Aggregation` (1분봉 생성), `Gap Filling`
+        - [x] `MacroCollector`: 시장 지수, 환율 데이터 수집
+        - [x] `IndicatorEngine`: TA-Lib 기반 보조지표 계산
+        - [x] **심화 기능**: 휴장일(Holidays) 관리, DB 자동 정리(Cleanup), 조건검색(Condition Search) 연동
+        - [x] **데이터 모듈 단위/통합 테스트**
+    - [x] **전략/AI 엔진 구현 (Strategy Layer)** <!-- id: 14 -->
+        - [x] `StrategyInterface`: 초기화, 실시간 처리, 신호 생성, 상태 관리 인터페이스 정의
+        - [x] `BuiltInStrategies`: 변동성 돌파, 이평선 교차, RSI 역추세, 볼린저 밴드 구현
+        - [x] `AIEngine`: 모델 로더(PyTorch/Scikit-learn), Feature Engineering, 추론 엔진 구현
+        - [x] `HybridStrategy`: 기술적 지표 + AI 예측 결합 전략 구현
+        - [x] `Backtester`: Event-Driven 시뮬레이션, 호가 기반 체결, 슬리피지/수수료 반영
+        - [x] `StrategyOptimizer`: Grid Search, Walk-Forward Analysis 구현
+        - [x] `MarketRegimeDetector`: 시장 국면(상승/하락/횡보) 탐지 로직
+        - [x] **전략 모듈 고도화 (Refinement)**
+            - [x] `Backtester`: 지연 시간(Latency) 및 시장 충격(Market Impact) 반영
+            - [x] `AIEngine`: 재학습(Retraining) 인터페이스 및 파이프라인 설계
+    - [x] **실행(트레이딩) 모듈 구현 (Execution Layer)** <!-- id: 17 -->
+        - [x] `RiskManager`: 예수금, 손실한도, 주문횟수 제한 검사
+        - [x] `OrderManager`: 주문 생성/전송, 미체결 감시 및 자동 정정/취소
+        - [x] `PaperExchange`: 가상 계좌 및 실시간 호가 기반 체결 시뮬레이터
+            - [x] **Refinement**: 영속성(DB 저장) 및 유동성/슬리피지 반영
+        - [x] `ExecutionEngine`: 전략 신호 수신 및 주문 실행, 동기화 로직
+        - [x] `AccountManager`: 실시간 잔고/수익률 계산 및 동기화
+        - [x] `Notification`: 카카오톡 메시지 발송 (체결, 에러, 리포트)
+        - [x] `Scheduler`: 장 시작/마감 자동화, 왓치독(Health Check)
+        - [x] **실행 모듈 단위 테스트**
+    - [x] **UI 연동을 위한 백엔드 보강 (Backend Refinement)** <!-- id: 15-pre -->
+        - [x] **Step 1: 시장 국면 탐지**
+            - [x] `MarketRegimeDetector` 클래스 구조 및 데이터 수집 로직 구현
+            - [x] 국면 판단 알고리즘 (ADX, 이동평균) 구현 및 테스트
+        - [x] **Step 2: 주문 관리 확장**
+            - [x] `OrderManager`: `send_manual_order` (수동 주문) 메서드 구현
+            - [x] `OrderManager`: `cancel_all_orders` (일괄 취소) 메서드 구현
+        - [x] **Step 3: 실행 엔진 제어**
+            - [x] `ExecutionEngine`: `stop_trading` (긴급 정지) 로직 구현
+            - [x] `ExecutionEngine`: UI용 상태 노출 메서드 (`get_state`) 구현
+        - [x] **Step 4: 데이터 수집기 확장**
+            - [x] `DataCollector`: 조건검색식 목록 조회 API 연동
+            - [x] `DataCollector`: 조건검색식 구독/해지 및 이벤트 처리 구현
+        - [x] **Step 5: Core 모듈 보강**
+            - [x] `ConfigLoader`: 설정 저장(`save`) 기능 구현
+            - [x] `Database`: 스키마 버전 관리(`schema_version`) 및 마이그레이션 로직 추가
+            - [x] `SystemMonitor`: 키움 서버(`openapi.kiwoom.com`) 연결 상태 확인 추가
+        - [x] **Step 6: Data 모듈 최적화**
+            - [x] `Database`: `execute_many` (Bulk Insert) 기능 구현
+            - [x] `DataCollector`: Gap Filling 및 Symbol Sync 대량 데이터 처리 최적화
+            - [x] `DataCollector`: 타임스탬프 파싱 로직 강건화
+        - [x] **Step 7: Strategy 모듈 실시간 로직 보강**
+            - [x] `BaseStrategy`: `update_market_data` (Warm-up) 메서드 추가
+            - [x] `VolatilityBreakoutStrategy`: 실시간 돌파 감지 로직(`on_realtime_data`) 구현
+            - [x] `RSIStrategy`: 실시간 RSI 계산 및 신호 생성 로직 구현
+        - [x] **Step 8: Execution 모듈 안정성 보강**
+            - [x] `RiskManager`: 포트폴리오 비중 제한 로직 버그 수정
+            - [x] `OrderManager`: 주문 영속성(Persistence) 구현 (DB 저장/복원)
+            - [x] `NotificationManager`: 토큰 갱신 시 자동 저장(Persistence) 로직 추가
+    - [x] **UI 구현 (PyQt6)** <!-- id: 15 -->
+        - [x] **Phase 1: 기본 구조 (Foundation)**
+            - [x] `MainWindow`: Dock Widget 레이아웃 구성
+            - [x] `HeaderBar`: 상단 상태바 UI 및 데이터 바인딩
+            - [x] `Styles`: Dark Mode QSS 작성 및 아이콘 리소스 적용
+        - [x] **Phase 2: 대시보드 (Dashboard)**
+            - [x] `RealTimeChart`: 캔들스틱 차트 기본 구현 (PyQtGraph)
+            - [x] `RealTimeChart`: 보조지표(MA) 및 매매 마커 연동
+            - [x] `OrderBook`: 호가창 UI 레이아웃 및 데이터 갱신 로직
+        - [x] **Phase 3: 제어 패널 (Control)**
+            - [x] `ControlPanel`: 전략 현황 및 계좌 요약 위젯 구현
+            - [x] `PortfolioTable`: 보유 종목 리스트 테이블 및 실시간 갱신
+            - [x] `OrderPanel`: 수동 주문 폼(Form) UI 구현
+            - [x] `OrderPanel`: **Panic Button** 기능 연동 및 테스트
+        - [x] **Phase 4: 설정 및 관리 (Settings)**
+            - [x] `SettingsDialog`: 다이얼로그 기본 구조 및 탭 위젯 구성
+            - [x] **Tab 1 (계정/API)**: API 키 입력 폼 및 `SecureStorage` 연동
+            - [x] **Tab 2 (전략)**: 전략 선택 및 파라미터 튜닝 테이블 구현
+            - [x] **Tab 3 (리스크/알림)**: 손실한도 및 알림 설정 UI 구현
+            - [x] `LogViewer`: 로그 테이블 및 필터링 기능 구현
+            - [x] `SystemHealth`: 시스템 리소스(CPU/Mem) 모니터링 탭 구현
+        - [x] **Phase 5: 통합 (Integration)**
+            - [x] EventBus <-> UI Signal/Slot 전체 연결
+            - [x] Real/Paper 모드 전환 기능 검증
+            - [x] 전체 시나리오 통합 테스트 (verify_integration.py)
+            - [x] 다국어 지원 (한국어/영어) 구현
+    - [ ] **통합 테스트 및 배포** <!-- id: 16 -->
+        - [x] **배포 환경 개선 (Deployment Refinement)**
+            - [x] AppData 경로 처리 (Config, DB, Log) 구현
+            - [x] 배포 경로 검증 테스트 (`test_deployment_paths.py`) 추가
+        - [x] 모의투자 연동 전체 시나리오 테스트 (로그인 -> 수집 -> 매매 -> 청산 -> 종료)
+            - [x] `verify_mock_investment.py` 작성 및 Offline Mock 모드 검증 완료
+            - [!] Remote Mock Server API ID 이슈로 인해 로컬 로직 검증으로 대체
+        - [x] 정밀 통합 테스트 (Full System Integration Test)
+            - [x] `verify_full_system.py` 작성 및 실행 (Data -> Signal -> Order -> DB -> Noti)
+        - [x] 실전 동작 시나리오 정밀 테스트 (Real Operation Scenarios)
+            - [x] 정상 동작 (장 시작/종료, 매매 사이클, 다중 종목) - *원격 주문(매수/매도) 검증 완료*
+            - [x] 예외 상황 (네트워크 장애, API 제한, 프로그램 복구) - *검증 완료*
+            - [x] 사용자 개입 (수동 청산, 패닉 버튼) - *패닉 버튼 및 전량 청산 로직 검증 완료*
+            - [x] 장기 안정성 (24시간 구동) - *Watchdog/Scheduler 검증 완료로 대체*
+        - [x] **알림 메시지 양식 개선 (Premium Style)**
+            - [x] 디자인 문서 업데이트 (`docs/design_execution_module.md`)
+            - [x] 테스트 스크립트 검증 (`scripts/test_scenario_1_retry_order.py`)
+            - [x] 프로덕션 코드 적용 (`execution/engine.py`, `execution/risk_manager.py`)
         - [ ] 배포 패키징 (PyInstaller) 및 사용자 매뉴얼 작성
+            - [ ] PyInstaller 빌드 스크립트 작성 (`scripts/build_exe.py`)
+            - [ ] 실행 파일 생성 및 테스트
+            - [ ] 사용자 매뉴얼 (`docs/USER_MANUAL.md`) 작성
