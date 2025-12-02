@@ -1,49 +1,35 @@
-# Phase 5: Integration Implementation Walkthrough
+# Walkthrough - UI Normalization & Deployment Prep
 
-## Overview
-Successfully integrated the Frontend (UI) with the Backend (Core/Data/Execution) using the `EventBus`. This enables real-time data updates and bidirectional control. Additionally, implemented Operational Visibility features (Latency, Heartbeat) and Simulation Control.
+## 1. UI Normalization
+Addressed the "Functional Normalization" tasks to ensure the UI handles empty states and data binding correctly.
 
-## Changes
+### Changes
+- **`execution/account_manager.py`**: Fixed event publishing to match UI expectations. Now publishes `account.summary` (balance) and `account.portfolio` (positions list) separately.
+- **`ui/widgets/order_book_widget.py`**: Added "Waiting for data..." empty state when the order book is cleared or has no data.
+- **`ui/main_window.py`**: Verified signal connections for `ControlPanel` and `OrderPanel`.
 
-### 1. EventBus Integration
-- **File**: `ui/main_window.py`
-- **Description**: Implemented `_connect_signals` to bridge `EventBus` topics to `pyqtSignal`s.
-- **Flow**:
-    - **Backend -> UI**: `market.data.*`, `account.*` events trigger UI updates via signals (Thread-Safe).
-    - **UI -> Backend**: User actions (Order, Panic) publish events to `EventBus`.
-- **Graceful Shutdown**: Implemented `closeEvent` to publish `system.shutdown`.
+### Verification
+- **ControlPanel**: Should now correctly display account summary and portfolio data (or "No positions").
+- **OrderPanel**: Quick Qty logic now receives `deposit` updates correctly.
+- **OrderBook**: Displays waiting message when no data is available.
 
-### 2. Operational Visibility
-- **File**: `ui/widgets/header_bar.py`
-- **Features**:
-    - **Latency Indicator**: Displays `LAT: 0ms` (placeholder for now, ready for real data).
-    - **Heartbeat**: Blinking "WS" icon to visualize connection health.
+## 2. Deployment Preparation
+Prepared the codebase for packaging with PyInstaller.
 
-### 3. Simulation Control
-- **File**: `ui/widgets/settings_tabs.py`
-- **Feature**: Added "Enable Paper Trading (Simulation)" checkbox to `SystemSettingsTab`.
+### Changes
+- **`core/utils.py`**: Added `get_resource_path()` helper function to handle file paths in both development (local) and frozen (PyInstaller) modes.
+- **`ui/main_window.py`**: Updated to use `get_resource_path` for loading `styles.qss`.
+- **`scripts/build_exe.py`**:
+    - Added `ui/styles.qss` to data files.
+    - Added hidden imports for `joblib`, `sklearn`, `talib` to prevent `ModuleNotFoundError` in the executable.
 
-## Verification Results
+## 3. Documentation
+Created **[USER_MANUAL.md](file:///e:/GitHub/Trader/PainTrader/docs/USER_MANUAL.md)** covering:
+- Installation & Setup
+- Dashboard Overview
+- Configuration (Strategy, Risk, Notifications)
+- Troubleshooting
 
-### Automated Integration Test
-Ran `verify_integration.py` which simulates the backend environment using `qasync`.
-
-```text
-Starting Integration Verification...
-[TEST] Publishing 'market.data.macro'...
-[TEST] Publishing 'account.summary'...
-[TEST] Simulating 'BUY' click in OrderPanel...
-[TEST] Simulating 'STOP ALGO' click...
-[SUCCESS] Backend received order: {'type': 'BUY', 'code': '005930', 'price': 70000, 'qty': 10}
-[SUCCESS] Backend received panic: {'action': 'STOP'}
-Verification Finished.
-```
-
-### Key Observations
-- **Thread Safety**: No `QThread` or `asyncio` loop conflicts were observed during signal emission.
-- **Responsiveness**: UI updates (simulated) did not block the main thread.
-- **Control**: Panic button successfully triggered the backend event.
-
-## Next Steps
-- **System Test**: Run the full application with the real `DataCollector` and `KiwoomAPI` (mocked or real) to validate end-to-end data flow.
-- **Deployment**: Package the application for distribution.
+## 4. Build Status
+- Initiated PyInstaller build using `scripts/build_exe.py`.
+- The build is currently processing (including TensorFlow hooks).

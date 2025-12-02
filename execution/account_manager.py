@@ -18,7 +18,10 @@ class AccountManager:
             "deposit": 0.0,
             "total_asset": 0.0,
             "daily_pnl": 0.0,
-            "total_pnl": 0.0
+            "total_pnl": 0.0,
+            "total_purchase": 0.0,
+            "total_eval": 0.0,
+            "total_return": 0.0
         }
         self.positions: Dict[str, Dict[str, Any]] = {} # symbol -> position_info
         
@@ -63,6 +66,10 @@ class AccountManager:
         
         try:
             res = await self.exchange.get_account_balance()
+            if not res:
+                self.logger.warning("Failed to fetch balance: No response (or API Error)")
+                return
+
             # Check if response is wrapped in "output" (Mock) or flat (Real)
             data = res.get("output", res)
             
@@ -84,6 +91,9 @@ class AccountManager:
             self.balance["deposit"] = cash
             self.balance["total_asset"] = total_asset
             self.balance["total_pnl"] = float(data.get("tot_evlt_pl", data.get("tot_evlt_pl_amt", 0)))
+            self.balance["total_purchase"] = float(data.get("tot_pur_amt", 0))
+            self.balance["total_eval"] = stock_eval
+            self.balance["total_return"] = float(data.get("tot_prft_rt", data.get("tot_earning_rate", 0)))
             
             # Update Positions
             # Real Key: acnt_evlt_remn_indv_tot
@@ -110,7 +120,18 @@ class AccountManager:
             
             # Publish Event for UI
             from core.event_bus import event_bus
-            event_bus.publish("ACCOUNT_UPDATE", self.get_summary())
+            # 1. Balance Summary
+            event_bus.publish("account.summary", {"balance": self.balance})
+            
+            # 2. Portfolio (List of positions)
+            # Add 'code' to each position dict for UI convenience if not already there
+            portfolio_list = []
+            for code, pos in self.positions.items():
+                pos_data = pos.copy()
+                pos_data["code"] = code
+                portfolio_list.append(pos_data)
+            
+            event_bus.publish("account.portfolio", portfolio_list)
             
         except Exception as e:
             self.logger.error(f"Error updating balance: {e}")

@@ -50,6 +50,14 @@ class OrderBookWidget(QWidget):
         bids: list of (price, volume) sorted by price descending
         """
         # Clear table logic if needed, but here we just update cells
+        if not asks and not bids:
+            self.table.setRowCount(1)
+            item = QTableWidgetItem("Waiting for data...")
+            item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(0, 0, item)
+            self.table.setSpan(0, 0, 1, 3)
+            return
+
         if self.table.rowCount() != 20:
              self.table.setRowCount(20)
              self.table.clearSpans()

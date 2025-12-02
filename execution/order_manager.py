@@ -11,9 +11,10 @@ class OrderManager:
     """
     Manages order lifecycle: Send, Monitor, Cancel/Modify.
     """
-    def __init__(self, kiwoom: KiwoomRestClient):
+    def __init__(self, kiwoom: KiwoomRestClient, notification_manager=None):
         self.logger = get_logger("OrderManager")
         self.kiwoom = kiwoom
+        self.notification = notification_manager
         self.active_orders: Dict[str, Dict[str, Any]] = {} # order_id -> order_info
         self.unfilled_check_interval = 5 # seconds
         self.max_unfilled_time = 60 # seconds
@@ -297,8 +298,30 @@ class OrderManager:
                 self.active_orders.pop(order_no)
                 await self.remove_order(order_no)
                 self.logger.info(f"Order {order_no} Fully Filled.")
+                
+                # Send Notification
+                if self.notification:
+                    msg = (
+                        f"✅ [체결 완료]\n"
+                        f"{order_info['symbol']} ({order_info['symbol']})\n\n"
+                        f"• 구분: {order_info['type']}\n"
+                        f"• 수량: {current_fill}주 (잔여: {remaining})\n"
+                        f"• 가격: {order_info['price']:,.0f}원"
+                    )
+                    await self.notification.send_message(msg)
             else:
                 await self.save_order(order_no, order_info)
+                
+                # Send Partial Fill Notification
+                if self.notification:
+                    msg = (
+                        f"⚠️ [부분 체결]\n"
+                        f"{order_info['symbol']} ({order_info['symbol']})\n\n"
+                        f"• 구분: {order_info['type']}\n"
+                        f"• 수량: {current_fill}주 (잔여: {remaining})\n"
+                        f"• 가격: {order_info['price']:,.0f}원"
+                    )
+                    await self.notification.send_message(msg)
                 
         elif status == 'CANCELLED':
             self.active_orders.pop(order_no)

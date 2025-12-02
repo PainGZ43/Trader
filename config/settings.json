@@ -1,0 +1,8 @@
+{
+    "LOG_LEVEL": "INFO",
+    "DB_PATH": "trade.db",
+    "KIWOOM_API_URL": "https://api.kiwoom.com",
+    "KIWOOM_WS_URL": "wss://api.kiwoom.com:10000/api/dostk/websocket",
+    "MOCK_MODE": false,
+    "TEST_UI_SETTING": "12345"
+}

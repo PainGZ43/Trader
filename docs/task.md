@@ -291,12 +291,12 @@
             - [x] Create `build.py`
             - [x] Test executable generation (Paused per user request)
         - [ ] 배포 패키징 (PyInstaller) 및 사용자 매뉴얼 작성
-            - [ ] PyInstaller 빌드 스크립트 작성 (`scripts/build_exe.py`)
+            - [x] PyInstaller 빌드 스크립트 작성 (`scripts/build_exe.py`)
             - [ ] 실행 파일 생성 및 테스트
-            - [ ] 사용자 매뉴얼 (`docs/USER_MANUAL.md`) 작성
+            - [x] 사용자 매뉴얼 (`docs/USER_MANUAL.md`) 작성
 
 ## UI/UX Phase 1: Functional Normalization
-- [ ] **ControlPanel**: Remove dummy data & implement empty state
-- [ ] **OrderPanel**: Implement Quick Qty logic (Link Account Data)
-- [ ] **Dashboard**: Add "No Data / Select Stock" Empty State
-- [ ] **OrderBook**: Fix fixed width & add empty states
+- [x] **ControlPanel**: Remove dummy data & implement empty state
+- [x] **OrderPanel**: Implement Quick Qty logic (Link Account Data)
+- [x] **Dashboard**: Add "No Data / Select Stock" Empty State
+- [x] **OrderBook**: Fix fixed width & add empty states

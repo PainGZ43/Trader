@@ -15,30 +15,45 @@ class ControlPanel(QWidget):
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(10)
 
-        # 1. Account Summary Section
+        # 1. Account Summary Section (Grid 2x3)
         summary_group = QFrame()
         summary_group.setStyleSheet("background-color: #252526; border-radius: 4px; padding: 5px;")
         summary_layout = QVBoxLayout(summary_group)
         
-        # Row 1: Total Asset
-        row1 = QHBoxLayout()
-        self.total_asset_label = QLabel(f"{language_manager.get_text('total_asset')}: 0 KRW")
-        self.total_asset_label.setStyleSheet("font-size: 14px; font-weight: bold; color: white;")
-        row1.addWidget(self.total_asset_label)
-        summary_layout.addLayout(row1)
+        from PyQt6.QtWidgets import QGridLayout
+        grid = QGridLayout()
+        grid.setSpacing(10)
         
-        # Row 2: Deposit & P&L
-        row2 = QHBoxLayout()
-        self.deposit_label = QLabel(f"{language_manager.get_text('deposit')}: 0 KRW")
-        self.deposit_label.setStyleSheet("color: #cccccc;")
+        # Define Labels
+        self.lbl_deposit = self._create_info_label(language_manager.get_text('deposit'))
+        self.val_deposit = self._create_value_label("0")
         
-        self.pnl_label = QLabel(f"{language_manager.get_text('pnl')}: 0 (0.00%)")
-        self.pnl_label.setStyleSheet("color: #cccccc;")
+        self.lbl_purchase = self._create_info_label(language_manager.get_text('total_purchase', 'Total Purchase'))
+        self.val_purchase = self._create_value_label("0")
         
-        row2.addWidget(self.deposit_label)
-        row2.addWidget(self.pnl_label)
-        summary_layout.addLayout(row2)
+        self.lbl_eval = self._create_info_label(language_manager.get_text('total_eval', 'Total Eval'))
+        self.val_eval = self._create_value_label("0")
         
+        self.lbl_pnl = self._create_info_label(language_manager.get_text('pnl'))
+        self.val_pnl = self._create_value_label("0")
+        
+        self.lbl_return = self._create_info_label(language_manager.get_text('total_return', 'Return %'))
+        self.val_return = self._create_value_label("0.00%")
+        
+        self.lbl_asset = self._create_info_label(language_manager.get_text('total_asset'))
+        self.val_asset = self._create_value_label("0")
+        
+        # Layout (Row 1)
+        grid.addWidget(self.lbl_deposit, 0, 0); grid.addWidget(self.val_deposit, 1, 0)
+        grid.addWidget(self.lbl_purchase, 0, 1); grid.addWidget(self.val_purchase, 1, 1)
+        grid.addWidget(self.lbl_eval, 0, 2); grid.addWidget(self.val_eval, 1, 2)
+        
+        # Layout (Row 2)
+        grid.addWidget(self.lbl_pnl, 2, 0); grid.addWidget(self.val_pnl, 3, 0)
+        grid.addWidget(self.lbl_return, 2, 1); grid.addWidget(self.val_return, 3, 1)
+        grid.addWidget(self.lbl_asset, 2, 2); grid.addWidget(self.val_asset, 3, 2)
+        
+        summary_layout.addLayout(grid)
         layout.addWidget(summary_group)
 
         # 2. Portfolio Table
@@ -77,19 +92,32 @@ class ControlPanel(QWidget):
         # Initialize with empty portfolio
         self.update_portfolio([])
 
-    def update_account_summary(self, total_asset, deposit, total_pnl, pnl_pct):
-        self.total_asset_label.setText(f"{language_manager.get_text('total_asset')}: {total_asset:,.0f} KRW")
-        self.deposit_label.setText(f"{language_manager.get_text('deposit')}: {deposit:,.0f} KRW")
+    def update_account_summary(self, total_asset, deposit, total_pnl, total_purchase, total_eval, total_return):
+        def fmt(val):
+            return f"{val:,.0f}" if val else "0"
+            
+        self.val_deposit.setText(fmt(deposit))
+        self.val_purchase.setText(fmt(total_purchase))
+        self.val_eval.setText(fmt(total_eval))
+        self.val_asset.setText(fmt(total_asset))
         
-        pnl_text = f"{language_manager.get_text('pnl')}: {total_pnl:,.0f} ({pnl_pct:+.2f}%)"
-        self.pnl_label.setText(pnl_text)
-        
+        # PnL
+        self.val_pnl.setText(fmt(total_pnl))
         if total_pnl > 0:
-            self.pnl_label.setStyleSheet("color: #ff6b6b; font-weight: bold;")
+            self.val_pnl.setStyleSheet("color: #ff5252; font-weight: bold; font-size: 13px;")
         elif total_pnl < 0:
-            self.pnl_label.setStyleSheet("color: #54a0ff; font-weight: bold;")
+            self.val_pnl.setStyleSheet("color: #448aff; font-weight: bold; font-size: 13px;")
         else:
-            self.pnl_label.setStyleSheet("color: #cccccc;")
+            self.val_pnl.setStyleSheet("color: white; font-weight: bold; font-size: 13px;")
+            
+        # Return Rate
+        self.val_return.setText(f"{total_return:+.2f}%")
+        if total_return > 0:
+            self.val_return.setStyleSheet("color: #ff5252; font-weight: bold; font-size: 13px;")
+        elif total_return < 0:
+            self.val_return.setStyleSheet("color: #448aff; font-weight: bold; font-size: 13px;")
+        else:
+            self.val_return.setStyleSheet("color: white; font-weight: bold; font-size: 13px;")
 
     def update_portfolio(self, holdings: list):
         """
@@ -148,3 +176,15 @@ class ControlPanel(QWidget):
             btn_layout.addWidget(btn)
             
             self.table.setCellWidget(row, 5, btn_widget)
+
+    def _create_info_label(self, text):
+        lbl = QLabel(text)
+        lbl.setStyleSheet("color: #888; font-size: 11px;")
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        return lbl
+
+    def _create_value_label(self, text):
+        lbl = QLabel(text)
+        lbl.setStyleSheet("color: white; font-size: 13px; font-weight: bold;")
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        return lbl

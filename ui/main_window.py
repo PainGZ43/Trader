@@ -45,7 +45,8 @@ class MainWindow(QMainWindow):
 
     def _load_stylesheet(self):
         try:
-            style_path = os.path.join(os.path.dirname(__file__), "styles.qss")
+            from core.utils import get_resource_path
+            style_path = get_resource_path(os.path.join("ui", "styles.qss"))
             with open(style_path, "r") as f:
                 self.setStyleSheet(f.read())
         except Exception as e:
@@ -55,6 +56,7 @@ class MainWindow(QMainWindow):
         # 1. Header Bar
         self.header = HeaderBar(self)
         self.header.settings_btn.clicked.connect(self.open_settings)
+        self.header.btn_backtest.clicked.connect(self.open_backtest)
         self.setMenuWidget(self.header) # Use setMenuWidget to place it at top
         
         # 2. Central Widget (Dashboard)
@@ -108,6 +110,11 @@ class MainWindow(QMainWindow):
             dialog.tabs.setCurrentIndex(tab_index)
         dialog.exec()
 
+    def open_backtest(self):
+        from ui.backtest_dialog import BacktestDialog
+        dialog = BacktestDialog(self)
+        dialog.exec()
+
     def _create_dock(self, title, area):
         dock = QDockWidget(title, self)
         dock.setObjectName(title) # Required for saveState
@@ -136,7 +143,9 @@ class MainWindow(QMainWindow):
             d.get("balance", {}).get("total_asset", 0), 
             d.get("balance", {}).get("deposit", 0), 
             d.get("balance", {}).get("total_pnl", 0), 
-            0 # pnl_pct not in balance yet
+            d.get("balance", {}).get("total_purchase", 0),
+            d.get("balance", {}).get("total_eval", 0),
+            d.get("balance", {}).get("total_return", 0)
         ))
         self.update_account_signal.connect(lambda d: self.order_panel.update_account_info(d.get("balance", {}).get("deposit", 0)))
         

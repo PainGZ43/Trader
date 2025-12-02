@@ -36,7 +36,8 @@ async def verify_account():
             return False
             
         # 2. Test AccountManager.update_balance()
-        logger.info("2. Testing AccountManager.update_balance()...")
+        logger.info("2. Testing AccountManager.update_balance() (Waiting 1s to avoid 429)...")
+        await asyncio.sleep(1.5) 
         await am.update_balance()
         
         summary = am.get_summary()
@@ -44,6 +45,10 @@ async def verify_account():
         positions = summary["positions"]
         
         print(f"\n[PARSED BALANCE] {json.dumps(balance, indent=2, ensure_ascii=False)}")
+        print(f"Total Purchase: {balance.get('total_purchase', 0):,.0f}")
+        print(f"Total Eval: {balance.get('total_eval', 0):,.0f}")
+        print(f"Total Return: {balance.get('total_return', 0):.2f}%")
+        
         print(f"[PARSED POSITIONS] {len(positions)} items")
         
         if balance["total_asset"] > 0:

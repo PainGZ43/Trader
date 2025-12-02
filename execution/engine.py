@@ -41,6 +41,9 @@ class ExecutionEngine:
         from execution.notification import NotificationManager
         self.notification_manager = NotificationManager()
         
+        # Inject Notification Manager into OrderManager
+        self.order_manager.notification = self.notification_manager
+        
         # Configure Risk Manager with Notification
         self.risk_manager.configure(self.config.get("risk", {}), self.notification_manager)
 

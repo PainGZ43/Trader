@@ -32,6 +32,15 @@ args = [
     '--hidden-import=aiosqlite',
     '--hidden-import=aiohttp',
     '--hidden-import=pyqtgraph',
+    '--hidden-import=joblib',
+    '--hidden-import=sklearn',
+    '--hidden-import=sklearn.ensemble',
+    '--hidden-import=sklearn.tree',
+    '--hidden-import=sklearn.utils._cython_blas',
+    '--hidden-import=sklearn.neighbors.typedefs',
+    '--hidden-import=sklearn.neighbors.quad_tree',
+    '--hidden-import=sklearn.tree._utils',
+    '--hidden-import=talib',
     
     # Exclude conflicting Qt bindings
     '--exclude-module=PyQt5',
@@ -39,7 +48,7 @@ args = [
     '--exclude-module=PySide6',
     
     # Data Files (if any)
-    # '--add-data=resources;resources', 
+    '--add-data=ui/styles.qss;ui', 
     
     # Icon (if available)
     # '--icon=resources/icon.ico',

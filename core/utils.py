@@ -32,3 +32,9 @@ def get_db_path(app_name="PainTrader", db_name="trade.db"):
 
 def get_config_path(app_name="PainTrader", config_name="settings.json"):
     return os.path.join(get_app_data_dir(app_name), config_name)
+
+def get_resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)

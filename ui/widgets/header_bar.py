@@ -82,6 +82,10 @@ class HeaderBar(QFrame):
         self.settings_btn = QPushButton()
         self.settings_btn.setIcon(qta.icon('fa5s.cog', color='white'))
         
+        self.btn_backtest = QPushButton("Backtest")
+        self.btn_backtest.setIcon(qta.icon('fa5s.flask', color='#f1c40f'))
+        self.layout.addWidget(self.btn_backtest)
+
         self.layout.addWidget(self.start_btn)
         self.layout.addWidget(self.stop_btn)
         self.layout.addWidget(self.settings_btn)

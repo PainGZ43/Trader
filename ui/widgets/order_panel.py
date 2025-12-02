@@ -23,8 +23,9 @@ class OrderPanel(QWidget):
         # Symbol Input
         row1 = QHBoxLayout()
         row1.addWidget(QLabel(language_manager.get_text("lbl_code")))
-        self.code_input = QLineEdit()
-        self.code_input.setPlaceholderText("005930")
+        from ui.widgets.symbol_search import SymbolSearchWidget
+        self.code_input = SymbolSearchWidget()
+        # self.code_input.setPlaceholderText("005930") # ComboBox doesn't support placeholder easily in this mode
         row1.addWidget(self.code_input)
         form_layout.addLayout(row1)
         
@@ -124,7 +125,7 @@ class OrderPanel(QWidget):
     def update_current_price(self, price):
         self.current_price = price
         # Auto-update price input if market order is NOT checked
-        if not self.market_chk.isChecked() and self.code_input.text():
+        if not self.market_chk.isChecked() and self.code_input.get_current_code():
              # Only update if user hasn't manually edited? 
              # For now, let's NOT auto-update input to avoid annoying user while typing.
              # Just store it for calc.
@@ -151,7 +152,7 @@ class OrderPanel(QWidget):
         self.qty_input.setValue(qty)
 
     def on_send_order(self, side):
-        code = self.code_input.text()
+        code = self.code_input.get_current_code()
         if not code:
             return
             
