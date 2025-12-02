@@ -108,10 +108,17 @@ class StrategySettingsTab(QWidget):
         self.strategy_list.setColumnCount(1)
         self.strategy_list.setHorizontalHeaderLabels(["Strategies"])
         self.strategy_list.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        # Dummy data
-        self.strategy_list.setRowCount(2)
-        self.strategy_list.setItem(0, 0, QTableWidgetItem("HybridStrategy"))
-        self.strategy_list.setItem(1, 0, QTableWidgetItem("ScalpingStrategy"))
+        # Available Strategies
+        strategies = [
+            "HybridStrategy", 
+            "VolatilityBreakoutStrategy", 
+            "MovingAverageCrossoverStrategy", 
+            "RSIStrategy", 
+            "BollingerBandStrategy"
+        ]
+        self.strategy_list.setRowCount(len(strategies))
+        for i, name in enumerate(strategies):
+            self.strategy_list.setItem(i, 0, QTableWidgetItem(name))
         layout.addWidget(self.strategy_list, 1)
         
         # Parameter Editor

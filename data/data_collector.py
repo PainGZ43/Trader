@@ -35,6 +35,7 @@ class DataCollector:
 
         # Register callback
         self.ws_client.add_callback(self.on_realtime_data)
+        self.ws_client.add_callback(self.macro_collector.on_realtime_data)
 
     def add_observer(self, callback):
         """
@@ -57,7 +58,9 @@ class DataCollector:
         
         # Start background tasks
         asyncio.create_task(self._schedule_monitor())
-        asyncio.create_task(self._macro_monitor())
+        # Start background tasks
+        asyncio.create_task(self._schedule_monitor())
+        asyncio.create_task(self.macro_collector.start_scheduler())
         
         # Load Conditions (No Auto-Subscribe)
         asyncio.create_task(self.load_conditions())
@@ -410,21 +413,7 @@ class DataCollector:
             await self.notify_observers(status_event)
             await asyncio.sleep(60)
 
-    async def _macro_monitor(self):
-        """
-        Monitor macro data.
-        """
-        while True:
-            await self.macro_collector.update_market_indices()
-            await self.macro_collector.update_exchange_rate()
-            
-            macro_event = {
-                "type": "MACRO",
-                "indices": self.macro_collector.indices,
-                "exchange_rate": self.macro_collector.exchange_rate
-            }
-            await self.notify_observers(macro_event)
-            await asyncio.sleep(60)
+
 
     async def notify_observers(self, data):
         """

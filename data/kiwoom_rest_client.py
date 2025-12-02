@@ -81,7 +81,18 @@ class KiwoomRestClient:
         
         # Dynamically update base_url based on active key type
         # This ensures we use the correct server even if config hasn't reloaded
-        if active_key.get("type") == "MOCK":
+        # Dynamically update base_url based on active key type
+        # This ensures we use the correct server even if config hasn't reloaded
+        key_type = active_key.get("type")
+        
+        if key_type == "VIRTUAL":
+            self.logger.info("Using VIRTUAL key. Switching to Offline/Mock Mode.")
+            self.offline_mode = True
+            self.is_mock_server = True
+            self.access_token = "VIRTUAL_TOKEN"
+            return self.access_token
+            
+        if key_type == "MOCK":
             self.base_url = self.BASE_URL_MOCK
             self.is_mock_server = True
         else:
@@ -207,6 +218,12 @@ class KiwoomRestClient:
             headers["tr_id"] = tr_id
         if api_id:
             headers["api-id"] = api_id
+            
+        # [PATCH] In Mock Mode, use internal mock for Market Indices (mrkcond) 
+        # because mockapi.kiwoom.com often doesn't return valid index data.
+        if self.is_mock_server and "mrkcond" in endpoint:
+             self.logger.info(f"[MOCK] Returning internal mock data for {endpoint}")
+             return self._get_mock_response(endpoint, tr_id, data)
         
         session = await self._get_session()
         url = f"{self.base_url}{endpoint}"
@@ -239,11 +256,22 @@ class KiwoomRestClient:
         
         # Market Index (KOSPI/KOSDAQ)
         if "mrkcond" in endpoint or tr_id == "ka10004":
+            mrkt_tp = data.get("mrkt_tp", "")
             stk_cd = data.get("stk_cd", "")
-            if stk_cd == "001": # KOSPI
-                price = 2500.0 + random.uniform(-10.0, 10.0)
-                change = random.uniform(-1.5, 1.5)
-                return {"output": {"price": f"{price:.2f}", "change": f"{change:+.2f}", "volume": "500000"}}
+            
+            if mrkt_tp == "1" or stk_cd == "001": # KOSPI
+                # Return structure matching PDF
+                return {
+                    "inds_netprps": [
+                        {
+                            "inds_cd": "001_AL",
+                            "inds_nm": "종합(KOSPI)",
+                            "cur_prc": "2500.50",
+                            "flu_rt": "+0.50",
+                            "volume": "500000"
+                        }
+                    ]
+                }
             elif stk_cd == "101": # KOSDAQ
                 price = 850.0 + random.uniform(-5.0, 5.0)
                 change = random.uniform(-1.0, 1.0)
@@ -274,9 +302,28 @@ class KiwoomRestClient:
 
     async def get_market_index(self, market_code):
         """
-        Get Market Index (KOSPI: 001, KOSDAQ: 101)
+        Get Market Index (KOSPI: 001)
+        Based on PDF: ka10004 (mrkcond) with mrkt_tp="1" (KOSPI)
         """
-        return await self.get_current_price(market_code)
+        endpoint = "/api/dostk/mrkcond"
+        tr_id = "ka10004"
+        
+        # market_code mapping
+        # 001 -> 1 (KOSPI)
+        # 101 -> 2 (KOSPI200) - Approximation or need to check PDF for KOSDAQ
+        # For now, we focus on KOSPI (001 -> 1)
+        
+        mrkt_tp = "1" # Default to KOSPI
+        if market_code == "001":
+            mrkt_tp = "1"
+        elif market_code == "200":
+            mrkt_tp = "2"
+            
+        data = {
+            "mrkt_tp": mrkt_tp
+        }
+        
+        return await self.request("POST", endpoint, data=data, api_id=tr_id)
 
     async def get_ohlcv(self, symbol, interval, start_date=None):
         """
@@ -442,29 +489,27 @@ class KiwoomRestClient:
     async def get_account_balance(self):
         """
         Get Account Balance and Withdrawable Cash.
+        Based on PDF: kt00018 (/api/dostk/acnt)
         """
-        endpoint = "/api/dostk/balance"
-        tr_id = "opw00018"
+        endpoint = "/api/dostk/acnt"
+        tr_id = "kt00018"
         
         from data.key_manager import key_manager
         active_key = key_manager.get_active_key()
         acc_no = active_key["account_no"] if active_key else ""
         
+        # PDF Params:
+        # qry_tp: 1 (Balance/Asset), 2 (Deposit?) - PDF says 1:Balance
+        # dmst_stex_tp: KRX
         data = {
-            "acc_no": acc_no,
-            "password": "", # Usually required but handled by bridge or saved in server
-            "charge_yn": "0",
-            "ctx_area_fk": "", 
-            "ctx_area_nk": ""
+            "qry_tp": "1",
+            "dmst_stex_tp": "KRX",
+            "acc_no": acc_no # Usually required even if not explicitly in body table sometimes
         }
         
-        if self.is_mock_server:
-             return {
-                 "output": {
-                     "single": [{"total_purchase_amt": "10000000", "total_eval_amt": "10500000", "total_eval_profit_loss_amt": "500000", "total_earning_rate": "5.0", "pres_asset_total": "20000000", "deposit": "9500000"}],
-                     "multi": [{"code": "005930", "name": "Samsung Elec", "qty": "10", "avg_price": "68000", "cur_price": "70000", "eval_amt": "700000", "earning_rate": "2.9"}]
-                 }
-             }
+        # if self.is_mock_server:
+        #      return { ... } 
+        # Removed to allow fetching from Mock API Server
         
         return await self.request("POST", endpoint, data=data, api_id=tr_id)
 

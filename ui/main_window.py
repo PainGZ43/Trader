@@ -64,6 +64,28 @@ class MainWindow(QMainWindow):
         # 3. Dock Widgets
         self._create_dock_widgets()
 
+        # 4. Check API Keys (Delayed to ensure window is visible)
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(1000, self.check_api_keys)
+
+    def check_api_keys(self):
+        """Check if Kiwoom API keys are present, if not guide user to settings."""
+        from data.key_manager import key_manager
+        
+        # Check if there is an active key
+        active_key = key_manager.get_active_key()
+
+        if not active_key:
+            reply = QMessageBox.warning(
+                self, 
+                language_manager.get_text("api_key_missing_title", "API Key Missing"),
+                language_manager.get_text("api_key_missing_msg", "Kiwoom API Key is not set.\nWould you like to set it now?"),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            
+            if reply == QMessageBox.StandardButton.Yes:
+                self.open_settings(tab_index=0)
+
     def _create_dock_widgets(self):
         # Left Panel (Strategy & Account)
         self.dock_left = self._create_dock(language_manager.get_text("dock_strategy"), Qt.DockWidgetArea.LeftDockWidgetArea)
@@ -80,8 +102,10 @@ class MainWindow(QMainWindow):
         self.log_viewer = LogViewer()
         self.dock_bottom.setWidget(self.log_viewer)
 
-    def open_settings(self):
+    def open_settings(self, tab_index=0):
         dialog = SettingsDialog(self)
+        if tab_index > 0:
+            dialog.tabs.setCurrentIndex(tab_index)
         dialog.exec()
 
     def _create_dock(self, title, area):
@@ -106,10 +130,20 @@ class MainWindow(QMainWindow):
         self.update_tick_signal.connect(lambda d: self.dashboard.process_data({"type": "REALTIME", **d}))
         self.update_orderbook_signal.connect(lambda d: self.dashboard.process_data({"type": "ORDERBOOK", **d}))
         
+        self.update_account_signal.connect(self.header.update_account_info)
+        
         self.update_account_signal.connect(lambda d: self.control_panel.update_account_summary(
-            d.get("total_asset", 0), d.get("deposit", 0), d.get("total_pnl", 0), d.get("pnl_pct", 0)
+            d.get("balance", {}).get("total_asset", 0), 
+            d.get("balance", {}).get("deposit", 0), 
+            d.get("balance", {}).get("total_pnl", 0), 
+            0 # pnl_pct not in balance yet
         ))
+        self.update_account_signal.connect(lambda d: self.order_panel.update_account_info(d.get("balance", {}).get("deposit", 0)))
+        
         self.update_portfolio_signal.connect(self.control_panel.update_portfolio)
+        
+        # Update OrderPanel current price for Quick Qty calc
+        self.update_tick_signal.connect(lambda d: self.order_panel.update_current_price(d.get("price", 0)))
         
         self.system_error_signal.connect(self._on_system_error)
         

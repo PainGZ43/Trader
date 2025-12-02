@@ -27,24 +27,34 @@ class HeaderBar(QFrame):
         self.logo_btn.setFlat(True)
         self.logo_btn.setStyleSheet("border: none; background: transparent;")
         
-        self.logo_btn.setStyleSheet("border: none; background: transparent;")
-        
         self.title_label = QLabel(language_manager.get_text("header_title"))
         self.title_label.setObjectName("LogoLabel")
+        
         
         self.layout.addWidget(self.logo_btn)
         self.layout.addWidget(self.title_label)
         
         self.layout.addStretch(1)
         
-        # 2. Macro Indicators (Placeholders)
-        self.kospi_label = self._create_macro_label("KOSPI", "2,500.00", "+0.5%")
-        self.kosdaq_label = self._create_macro_label("KOSDAQ", "850.00", "-0.2%")
-        self.usd_label = self._create_macro_label("USD/KRW", "1,300.0", "+1.5")
+        # 2. Macro Indicators
+        self.kospi_label = self._create_macro_label(language_manager.get_text("kospi"), "--", "-")
+        self.usd_label = self._create_macro_label(language_manager.get_text("usd_krw"), "--", "-")
         
         self.layout.addWidget(self.kospi_label)
-        self.layout.addWidget(self.kosdaq_label)
         self.layout.addWidget(self.usd_label)
+        
+        self.layout.addWidget(self.usd_label)
+        
+        self.layout.addStretch(1)
+        
+        # 2.5 Account Info
+        self.asset_label = self._create_macro_label(language_manager.get_text("total_asset"), "--", "")
+        self.deposit_label = self._create_macro_label(language_manager.get_text("deposit"), "--", "")
+        self.pnl_label = self._create_macro_label(language_manager.get_text("total_pnl"), "--", "")
+        
+        self.layout.addWidget(self.asset_label)
+        self.layout.addWidget(self.deposit_label)
+        self.layout.addWidget(self.pnl_label)
         
         self.layout.addStretch(1)
         
@@ -76,66 +86,6 @@ class HeaderBar(QFrame):
         self.layout.addWidget(self.stop_btn)
         self.layout.addWidget(self.settings_btn)
 
-    def _create_macro_label(self, name, value, change):
-        lbl = QLabel(f"{name} {value} ({change})")
-        # Color logic based on change
-        if "+" in change:
-            lbl.setStyleSheet("color: #ff5252; font-weight: bold;") # Red for up (KR market)
-        elif "-" in change:
-            lbl.setStyleSheet("color: #448aff; font-weight: bold;") # Blue for down
-        else:
-            lbl.setStyleSheet("color: white;")
-        return lbl
-
-    def update_macro(self, data):
-        """Update macro indicators."""
-        indices = data.get("indices", {})
-        rate = data.get("exchange_rate", 0.0)
-        
-        # Helper to update label text and color
-        def update_lbl(lbl, name, val, change):
-            lbl.setText(f"{name} {val} ({change})")
-            if "+" in str(change):
-                lbl.setStyleSheet("color: #ff5252; font-weight: bold;")
-            elif "-" in str(change):
-                lbl.setStyleSheet("color: #448aff; font-weight: bold;")
-            else:
-                lbl.setStyleSheet("color: white;")
-
-        # Parse data (Assuming data comes in as raw values, we might need change calc or data includes it)
-        # For now, assuming data includes 'change' or we just show value.
-        # Let's assume data structure: {'KOSPI': {'value': '2500', 'change': '+0.5%'}, ...}
-        # Or simple: {'indices': {'KOSPI': '2500'}, 'exchange_rate': '1300'}
-        # The current Dashboard logic was: KOSPI: {indices.get('KOSPI')}
-        
-        # Let's adapt to what Dashboard was doing but make it better if possible.
-        # Dashboard: self.kospi_label.setText(f"KOSPI: {indices.get('KOSPI', '-')}")
-        
-        k_val = indices.get('KOSPI', '-')
-        kq_val = indices.get('KOSDAQ', '-')
-        
-        # We don't have change data in the simple dict passed to dashboard. 
-        # We will just update the text for now.
-        self.kospi_label.setText(f"KOSPI {k_val}")
-        self.kosdaq_label.setText(f"KOSDAQ {kq_val}")
-        self.usd_label.setText(f"USD/KRW {rate}")
-
-    def _create_status_indicator(self, text, icon_name, color):
-        widget = QWidget()
-        layout = QHBoxLayout(widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(5)
-        
-        icon = QLabel()
-        icon.setPixmap(qta.icon(icon_name, color=color).pixmap(16, 16))
-        
-        lbl = QLabel(text)
-        lbl.setStyleSheet("font-size: 11px; color: #ccc;")
-        
-        layout.addWidget(icon)
-        layout.addWidget(lbl)
-        return widget
-
     def _start_monitoring(self):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._update_resources)
@@ -161,8 +111,6 @@ class HeaderBar(QFrame):
 
     def update_latency(self, ms):
         self.latency = ms
-        # Immediate update or wait for timer? Timer is better for stability.
-        # Just store it.
         
     def _blink_heartbeat(self):
         # Blink WS icon if connected
@@ -172,6 +120,96 @@ class HeaderBar(QFrame):
             icon_label = self.socket_status.findChild(QLabel)
             if icon_label:
                 icon_label.setPixmap(qta.icon("fa5s.bolt", color=color).pixmap(16, 16))
+
+    def _create_macro_label(self, name, value, change):
+        lbl = QLabel(f"{name} {value} ({change})")
+        # Color logic based on change
+        if "+" in change:
+            lbl.setStyleSheet("color: #ff5252; font-weight: bold;") # Red for up (KR market)
+        elif "-" in change:
+            lbl.setStyleSheet("color: #448aff; font-weight: bold;") # Blue for down
+        else:
+            lbl.setStyleSheet("color: white;")
+        return lbl
+
+    def update_macro(self, data):
+        """Update macro indicators."""
+        indices = data.get("indices", {})
+        changes = data.get("changes", {})
+        rate = data.get("exchange_rate", 0.0)
+        
+        # Helper to update label text and color
+        def update_lbl(lbl, name_key, val, change="-"):
+            name = language_manager.get_text(name_key)
+            
+            # Check for invalid/missing data (0.0 or None)
+            if not val or val == 0.0:
+                lbl.setText(f"{name} --")
+                lbl.setStyleSheet("color: #888; font-weight: bold;") # Grey for no data
+                return
+
+            # Format value if float
+            if isinstance(val, float):
+                val_str = f"{val:,.2f}"
+            else:
+                val_str = str(val)
+                
+            lbl.setText(f"{name} {val_str} ({change})")
+            
+            # Color logic
+            if "+" in str(change):
+                lbl.setStyleSheet("color: #ff5252; font-weight: bold;")
+            elif "-" in str(change):
+                lbl.setStyleSheet("color: #448aff; font-weight: bold;")
+            else:
+                lbl.setStyleSheet("color: white; font-weight: bold;")
+
+        # Update Labels
+        update_lbl(self.kospi_label, "kospi", indices.get('KOSPI', 0.0), changes.get('KOSPI', '-'))
+        update_lbl(self.usd_label, "usd_krw", rate)
+
+    def update_account_info(self, data):
+        """Update account info labels."""
+        balance = data.get("balance", {})
+        
+        total_asset = balance.get("total_asset", 0)
+        deposit = balance.get("deposit", 0)
+        total_pnl = balance.get("total_pnl", 0)
+        
+        # Helper to format
+        def fmt(val):
+            return f"{val:,.0f}" if val else "0"
+            
+        self.asset_label.setText(f"{language_manager.get_text('total_asset')} {fmt(total_asset)}")
+        self.deposit_label.setText(f"{language_manager.get_text('deposit')} {fmt(deposit)}")
+        
+        # PnL with color
+        pnl_str = fmt(total_pnl)
+        if total_pnl > 0:
+            self.pnl_label.setText(f"{language_manager.get_text('total_pnl')} +{pnl_str}")
+            self.pnl_label.setStyleSheet("color: #ff5252; font-weight: bold;")
+        elif total_pnl < 0:
+            self.pnl_label.setText(f"{language_manager.get_text('total_pnl')} {pnl_str}")
+            self.pnl_label.setStyleSheet("color: #448aff; font-weight: bold;")
+        else:
+            self.pnl_label.setText(f"{language_manager.get_text('total_pnl')} {pnl_str}")
+            self.pnl_label.setStyleSheet("color: white;")
+
+    def _create_status_indicator(self, text, icon_name, color):
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(5)
+        
+        icon = QLabel()
+        icon.setPixmap(qta.icon(icon_name, color=color).pixmap(16, 16))
+        
+        lbl = QLabel(text)
+        lbl.setStyleSheet("font-size: 11px; color: #ccc;")
+        
+        layout.addWidget(icon)
+        layout.addWidget(lbl)
+        return widget
 
     def update_status(self, target: str, status: bool):
         """Update status icons (API, DB, WS)."""

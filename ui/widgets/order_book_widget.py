@@ -37,8 +37,12 @@ class OrderBookWidget(QWidget):
         
         self.layout.addWidget(self.table)
         
-        # Initialize with 20 rows (10 ask + 10 bid)
-        self.table.setRowCount(20)
+        # Initialize with waiting message
+        self.table.setRowCount(1)
+        item = QTableWidgetItem("Waiting for data...")
+        item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.table.setItem(0, 0, item)
+        self.table.setSpan(0, 0, 1, 3)
 
     def update_orderbook(self, asks, bids):
         """
@@ -46,6 +50,9 @@ class OrderBookWidget(QWidget):
         bids: list of (price, volume) sorted by price descending
         """
         # Clear table logic if needed, but here we just update cells
+        if self.table.rowCount() != 20:
+             self.table.setRowCount(20)
+             self.table.clearSpans()
         
         # Asks (Sell) - Display from high to low (so lowest ask is near center)
         # We want the lowest ask at row 9, highest ask at row 0

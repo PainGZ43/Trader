@@ -118,9 +118,37 @@ class OrderPanel(QWidget):
         if checked:
             self.price_input.setValue(0)
 
+    def update_account_info(self, deposit):
+        self.available_deposit = deposit
+
+    def update_current_price(self, price):
+        self.current_price = price
+        # Auto-update price input if market order is NOT checked
+        if not self.market_chk.isChecked() and self.code_input.text():
+             # Only update if user hasn't manually edited? 
+             # For now, let's NOT auto-update input to avoid annoying user while typing.
+             # Just store it for calc.
+             pass
+
     def on_quick_qty(self, pct_str):
-        # Placeholder logic. Needs account info to calculate real qty.
-        print(f"Quick Qty: {pct_str}")
+        if not hasattr(self, 'available_deposit') or self.available_deposit <= 0:
+            QMessageBox.warning(self, "Error", language_manager.get_text("msg_no_deposit", "No available deposit."))
+            return
+            
+        price = self.price_input.value()
+        # If price is 0 (e.g. market order), try to use last known current price
+        if price <= 0:
+            if hasattr(self, 'current_price') and self.current_price > 0:
+                price = self.current_price
+            else:
+                QMessageBox.warning(self, "Error", language_manager.get_text("msg_no_price", "Price is required for calculation."))
+                return
+
+        pct = float(pct_str.replace("%", "")) / 100.0
+        amount = self.available_deposit * pct
+        qty = int(amount / price)
+        
+        self.qty_input.setValue(qty)
 
     def on_send_order(self, side):
         code = self.code_input.text()

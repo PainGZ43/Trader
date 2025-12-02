@@ -29,10 +29,18 @@ class Dashboard(QWidget):
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(10)
 
-        # 1. Main Content (Splitter)
+        # 1. Main Content (Stacked Layout)
+        from PyQt6.QtWidgets import QStackedLayout
+        self.stack_layout = QStackedLayout()
+        
+        # Page 0: Welcome / Empty State
+        self.welcome_widget = QLabel(language_manager.get_text("msg_welcome_select_stock", "Select a stock to start trading."))
+        self.welcome_widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.welcome_widget.setStyleSheet("font-size: 24px; color: #666; font-weight: bold;")
+        self.stack_layout.addWidget(self.welcome_widget)
+        
+        # Page 1: Active Dashboard (Splitter)
         splitter = QSplitter(Qt.Orientation.Horizontal)
-
-
         
         # Chart Area
         self.chart_widget = ChartWidget()
@@ -40,13 +48,24 @@ class Dashboard(QWidget):
         
         # Order Book Area
         self.order_book_widget = OrderBookWidget()
-        self.order_book_widget.setFixedWidth(300) # Fixed width for order book
+        # self.order_book_widget.setFixedWidth(300) # REMOVED fixed width
         splitter.addWidget(self.order_book_widget)
         
         splitter.setStretchFactor(0, 1) # Chart takes available space
         splitter.setStretchFactor(1, 0)
         
-        layout.addWidget(splitter)
+        # Wrap splitter in a widget to add to stack
+        splitter_widget = QWidget()
+        splitter_layout = QHBoxLayout(splitter_widget)
+        splitter_layout.setContentsMargins(0,0,0,0)
+        splitter_layout.addWidget(splitter)
+        
+        self.stack_layout.addWidget(splitter_widget)
+        
+        layout.addLayout(self.stack_layout)
+        
+        # Default to Welcome
+        self.stack_layout.setCurrentIndex(0)
 
     def on_data_received(self, data):
         """
@@ -62,6 +81,10 @@ class Dashboard(QWidget):
         event_type = data.get("type")
         
         if event_type == "REALTIME":
+            # Switch to Active View if on Welcome Screen
+            if self.stack_layout.currentIndex() == 0:
+                self.stack_layout.setCurrentIndex(1)
+                
             # Queue for chart update
             # Assuming data contains candle info or tick info that we aggregate
             # For now, let's assume we get a full candle or tick

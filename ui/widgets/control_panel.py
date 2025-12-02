@@ -74,11 +74,8 @@ class ControlPanel(QWidget):
         
         layout.addWidget(self.table)
         
-        # Add dummy data for visual check
-        self.update_portfolio([
-            {"code": "005930", "name": "Samsung", "avg_price": 70000, "current_price": 71000, "qty": 10},
-            {"code": "000660", "name": "SK Hynix", "avg_price": 120000, "current_price": 118000, "qty": 5},
-        ])
+        # Initialize with empty portfolio
+        self.update_portfolio([])
 
     def update_account_summary(self, total_asset, deposit, total_pnl, pnl_pct):
         self.total_asset_label.setText(f"{language_manager.get_text('total_asset')}: {total_asset:,.0f} KRW")
@@ -98,6 +95,16 @@ class ControlPanel(QWidget):
         """
         holdings: list of dicts
         """
+        self.table.setRowCount(0)
+        
+        if not holdings:
+            self.table.setRowCount(1)
+            item = QTableWidgetItem(language_manager.get_text("msg_no_positions", "No positions"))
+            item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(0, 0, item)
+            self.table.setSpan(0, 0, 1, 6)
+            return
+
         self.table.setRowCount(len(holdings))
         
         for row, item in enumerate(holdings):

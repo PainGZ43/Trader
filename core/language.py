@@ -25,6 +25,10 @@ class LanguageManager:
             # Dashboard
             "kospi": "코스피",
             "kosdaq": "코스닥",
+            "nasdaq": "나스닥",
+            "sp500": "S&P 500",
+            "dow": "다우존스",
+            "vix": "VIX",
             "usd_krw": "원/달러",
             
             # ControlPanel
@@ -75,7 +79,9 @@ class LanguageManager:
             # Common
             "error": "오류",
             "warning": "경고",
-            "info": "알림"
+            "info": "알림",
+            "api_key_missing_title": "API 키 설정 필요",
+            "api_key_missing_msg": "키움증권 API 키가 설정되지 않았습니다.\n지금 설정하시겠습니까?"
         },
         "en": {
             # MainWindow
@@ -95,6 +101,10 @@ class LanguageManager:
             # Dashboard
             "kospi": "KOSPI",
             "kosdaq": "KOSDAQ",
+            "nasdaq": "NASDAQ",
+            "sp500": "S&P 500",
+            "dow": "Dow Jones",
+            "vix": "VIX",
             "usd_krw": "USD/KRW",
             
             # ControlPanel
@@ -145,7 +155,9 @@ class LanguageManager:
             # Common
             "error": "Error",
             "warning": "Warning",
-            "info": "Info"
+            "info": "Info",
+            "api_key_missing_title": "API Key Missing",
+            "api_key_missing_msg": "Kiwoom API Key is not set.\nWould you like to set it now?"
         }
     }
 
@@ -169,9 +181,9 @@ class LanguageManager:
             return True
         return False
 
-    def get_text(self, key: str) -> str:
+    def get_text(self, key: str, default: str = None) -> str:
         """Get translated text for the key."""
         lang_dict = self.TRANSLATIONS.get(self.current_lang, self.TRANSLATIONS["ko"])
-        return lang_dict.get(key, key)
+        return lang_dict.get(key, default or key)
 
 language_manager = LanguageManager()

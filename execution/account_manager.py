@@ -63,37 +63,46 @@ class AccountManager:
         
         try:
             res = await self.exchange.get_account_balance()
-            if not res or "output" not in res:
-                self.logger.warning("Failed to fetch balance: Invalid response")
-                return
-
-            output = res["output"]
-            single = output.get("single", [{}])[0]
-            multi = output.get("multi", [])
-
-            # Update Balance
-            # Note: Keys might vary depending on TR (opw00018). 
-            # Adjusting to standard keys used in KiwoomRestClient mock/real.
-            self.balance["deposit"] = float(single.get("deposit", 0))
-            self.balance["total_asset"] = float(single.get("pres_asset_total", 0))
-            self.balance["total_pnl"] = float(single.get("total_eval_profit_loss_amt", 0))
+            # Check if response is wrapped in "output" (Mock) or flat (Real)
+            data = res.get("output", res)
             
-            # Daily PnL might need separate calculation or TR
-            # For now, assume total_pnl is what we track, or calculate daily diff if needed.
+            # Update Balance
+            # Real API Keys:
+            # prsm_dpst_aset_amt: Presumed Deposit Asset (Total Asset?)
+            # tot_evlt_amt: Total Evaluation Amount (Stocks)
+            # tot_evlt_pl: Total Profit/Loss
+            
+            total_asset = float(data.get("prsm_dpst_aset_amt", 0))
+            stock_eval = float(data.get("tot_evlt_amt", 0))
+            
+            # Estimate Cash = Total Asset - Stock Eval (if specific cash field missing)
+            # Or use 'deposit' if available (Mock)
+            cash = float(data.get("deposit", 0))
+            if cash == 0 and total_asset > 0:
+                cash = total_asset - stock_eval
+            
+            self.balance["deposit"] = cash
+            self.balance["total_asset"] = total_asset
+            self.balance["total_pnl"] = float(data.get("tot_evlt_pl", data.get("tot_evlt_pl_amt", 0)))
             
             # Update Positions
+            # Real Key: acnt_evlt_remn_indv_tot
+            # Mock Key: output_list or multi
+            multi = data.get("acnt_evlt_remn_indv_tot", data.get("output_list", data.get("multi", [])))
+            
             new_positions = {}
             for pos in multi:
-                code = pos.get("code", "").replace("A", "") # Remove 'A' prefix if exists
+                # Real: stk_cd, stk_nm, cur_prc, evlt_amt, prft_rt
+                code = pos.get("stk_cd", pos.get("code", "")).replace("A", "")
                 if not code: continue
                 
                 new_positions[code] = {
-                    "name": pos.get("name"),
-                    "qty": int(pos.get("qty", 0)),
-                    "avg_price": float(pos.get("avg_price", 0)),
-                    "current_price": float(pos.get("cur_price", 0)),
-                    "eval_amt": float(pos.get("eval_amt", 0)),
-                    "earning_rate": float(pos.get("earning_rate", 0))
+                    "name": pos.get("stk_nm", pos.get("name")),
+                    "qty": int(pos.get("rmnd_qty", pos.get("qty", 0))),
+                    "avg_price": float(pos.get("pur_pric", pos.get("avg_price", 0))),
+                    "current_price": float(pos.get("cur_prc", pos.get("cur_price", pos.get("current_price", 0)))),
+                    "eval_amt": float(pos.get("evlt_amt", pos.get("eval_amt", 0))),
+                    "earning_rate": float(pos.get("prft_rt", pos.get("earning_rate", 0)))
                 }
             
             self.positions = new_positions
