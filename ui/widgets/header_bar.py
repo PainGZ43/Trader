@@ -5,11 +5,104 @@ import qtawesome as qta
 import psutil
 from core.language import language_manager
 
+class MacroWidget(QWidget):
+    """
+    Custom Widget for Macro Indicators (Naver Style).
+    [ Title ]
+    [ Value (Large) ]
+    [ Icon Change (Small) ]
+    """
+    def __init__(self, title, parent=None):
+        super().__init__(parent)
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(5, 2, 5, 2)
+        self.layout.setSpacing(0)
+        
+        # Title
+        self.title_lbl = QLabel(title)
+        self.title_lbl.setStyleSheet("color: #888; font-size: 11px; font-weight: bold;")
+        self.title_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        
+        # Value
+        self.value_lbl = QLabel("--")
+        self.value_lbl.setStyleSheet("color: #e0e0e0; font-size: 16px; font-weight: bold;")
+        self.value_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        
+        # Change Container
+        change_widget = QWidget()
+        change_layout = QHBoxLayout(change_widget)
+        change_layout.setContentsMargins(0, 0, 0, 0)
+        change_layout.setSpacing(4)
+        
+        self.icon_lbl = QLabel()
+        self.change_lbl = QLabel("-")
+        self.change_lbl.setStyleSheet("font-size: 11px;")
+        
+        change_layout.addWidget(self.icon_lbl)
+        change_layout.addWidget(self.change_lbl)
+        change_layout.addStretch(1)
+        
+        self.layout.addWidget(self.title_lbl)
+        self.layout.addWidget(self.value_lbl)
+        self.layout.addWidget(change_widget)
+        
+        # Fixed Width for consistency
+        self.setFixedWidth(120)
+
+    def update_data(self, value, change_amt="-", change_pct="-"):
+        # Value
+        if isinstance(value, float):
+            self.value_lbl.setText(f"{value:,.2f}")
+        else:
+            self.value_lbl.setText(str(value))
+            
+        # Change Logic
+        # change_amt might be string with sign or float
+        # change_pct might be string "0.5%" or float
+        
+        try:
+            # Determine direction
+            is_up = False
+            is_down = False
+            
+            if isinstance(change_amt, (int, float)):
+                if change_amt > 0: is_up = True
+                elif change_amt < 0: is_down = True
+            elif isinstance(change_amt, str):
+                if "+" in change_amt or (change_amt.replace(".", "").isdigit() and float(change_amt) > 0):
+                    is_up = True
+                elif "-" in change_amt:
+                    is_down = True
+            
+            # Set Style
+            if is_up:
+                color = "#ff6b6b"
+                icon = qta.icon('fa5s.caret-up', color=color)
+                self.value_lbl.setStyleSheet(f"color: {color}; font-size: 16px; font-weight: bold;")
+                self.change_lbl.setStyleSheet(f"color: {color}; font-size: 11px;")
+            elif is_down:
+                color = "#54a0ff"
+                icon = qta.icon('fa5s.caret-down', color=color)
+                self.value_lbl.setStyleSheet(f"color: {color}; font-size: 16px; font-weight: bold;")
+                self.change_lbl.setStyleSheet(f"color: {color}; font-size: 11px;")
+            else:
+                color = "#e0e0e0"
+                icon = qta.icon('fa5s.minus', color=color)
+                self.value_lbl.setStyleSheet(f"color: {color}; font-size: 16px; font-weight: bold;")
+                self.change_lbl.setStyleSheet(f"color: {color}; font-size: 11px;")
+                
+            self.icon_lbl.setPixmap(icon.pixmap(10, 10))
+            self.change_lbl.setText(f"{change_amt} ({change_pct})")
+            
+        except Exception as e:
+            print(f"MacroWidget Error: {e}")
+
+
 class HeaderBar(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("HeaderBar")
-        self.setFixedHeight(50)
+        self.setFixedHeight(60) # Increased height for new widget
         
         self.layout = QHBoxLayout(self)
         self.layout.setContentsMargins(10, 5, 10, 5)
@@ -24,37 +117,42 @@ class HeaderBar(QFrame):
         logo_icon = qta.icon('fa5s.robot', color='#007acc')
         self.logo_btn = QPushButton()
         self.logo_btn.setIcon(logo_icon)
+        self.logo_btn.setIconSize(qta.QtCore.QSize(24, 24))
         self.logo_btn.setFlat(True)
         self.logo_btn.setStyleSheet("border: none; background: transparent;")
         
         self.title_label = QLabel(language_manager.get_text("header_title"))
         self.title_label.setObjectName("LogoLabel")
-        
+        self.title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #0098ff;")
         
         self.layout.addWidget(self.logo_btn)
         self.layout.addWidget(self.title_label)
         
         self.layout.addStretch(1)
         
-        # 2. Macro Indicators
-        self.kospi_label = self._create_macro_label(language_manager.get_text("kospi"), "--", "-")
-        self.usd_label = self._create_macro_label(language_manager.get_text("usd_krw"), "--", "-")
+        # 2. Macro Indicators (Naver Style)
+        self.kospi_widget = MacroWidget("KOSPI")
+        self.kosdaq_widget = MacroWidget("KOSDAQ")
+        self.usd_widget = MacroWidget("USD/KRW")
         
-        self.layout.addWidget(self.kospi_label)
-        self.layout.addWidget(self.usd_label)
+        self.layout.addWidget(self.kospi_widget)
+        self.layout.addWidget(self.kosdaq_widget)
         
-        self.layout.addWidget(self.usd_label)
+        # Separator
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.VLine)
+        line.setFrameShadow(QFrame.Shadow.Sunken)
+        line.setStyleSheet("background-color: #3e3e42;")
+        self.layout.addWidget(line)
+        
+        self.layout.addWidget(self.usd_widget)
         
         self.layout.addStretch(1)
         
-        # 2.5 Account Info
-        self.asset_label = self._create_macro_label(language_manager.get_text("total_asset"), "--", "")
-        self.deposit_label = self._create_macro_label(language_manager.get_text("deposit"), "--", "")
-        self.pnl_label = self._create_macro_label(language_manager.get_text("total_pnl"), "--", "")
-        
+        # 2.5 Account Info (Keep simple for now, or upgrade later)
+        self.asset_label = QLabel(f"{language_manager.get_text('total_asset')} --")
+        self.asset_label.setStyleSheet("color: #ccc; font-weight: bold;")
         self.layout.addWidget(self.asset_label)
-        self.layout.addWidget(self.deposit_label)
-        self.layout.addWidget(self.pnl_label)
         
         self.layout.addStretch(1)
         
@@ -125,79 +223,47 @@ class HeaderBar(QFrame):
             if icon_label:
                 icon_label.setPixmap(qta.icon("fa5s.bolt", color=color).pixmap(16, 16))
 
-    def _create_macro_label(self, name, value, change):
-        lbl = QLabel(f"{name} {value} ({change})")
-        # Color logic based on change
-        if "+" in change:
-            lbl.setStyleSheet("color: #ff5252; font-weight: bold;") # Red for up (KR market)
-        elif "-" in change:
-            lbl.setStyleSheet("color: #448aff; font-weight: bold;") # Blue for down
-        else:
-            lbl.setStyleSheet("color: white;")
-        return lbl
-
     def update_macro(self, data):
         """Update macro indicators."""
         indices = data.get("indices", {})
         changes = data.get("changes", {})
         rate = data.get("exchange_rate", 0.0)
         
-        # Helper to update label text and color
-        def update_lbl(lbl, name_key, val, change="-"):
-            name = language_manager.get_text(name_key)
-            
-            # Check for invalid/missing data (0.0 or None)
-            if not val or val == 0.0:
-                lbl.setText(f"{name} --")
-                lbl.setStyleSheet("color: #888; font-weight: bold;") # Grey for no data
-                return
-
-            # Format value if float
-            if isinstance(val, float):
-                val_str = f"{val:,.2f}"
+        # Helper to parse "Amt (Pct%)"
+        def parse_change(change_str):
+            amt, pct = "-", "-"
+            if "(" in str(change_str):
+                try:
+                    parts = str(change_str).split("(")
+                    amt = parts[0].strip()
+                    pct = parts[1].replace(")", "").replace("%", "") + "%"
+                except:
+                    amt = change_str
             else:
-                val_str = str(val)
-                
-            lbl.setText(f"{name} {val_str} ({change})")
-            
-            # Color logic
-            if "+" in str(change):
-                lbl.setStyleSheet("color: #ff5252; font-weight: bold;")
-            elif "-" in str(change):
-                lbl.setStyleSheet("color: #448aff; font-weight: bold;")
-            else:
-                lbl.setStyleSheet("color: white; font-weight: bold;")
+                amt = change_str
+            return amt, pct
 
-        # Update Labels
-        update_lbl(self.kospi_label, "kospi", indices.get('KOSPI', 0.0), changes.get('KOSPI', '-'))
-        update_lbl(self.usd_label, "usd_krw", rate)
+        # Update KOSPI
+        k_amt, k_pct = parse_change(changes.get('KOSPI', '-'))
+        self.kospi_widget.update_data(indices.get('KOSPI', 0.0), k_amt, k_pct)
+        
+        # Update KOSDAQ
+        kq_amt, kq_pct = parse_change(changes.get('KOSDAQ', '-'))
+        self.kosdaq_widget.update_data(indices.get('KOSDAQ', 0.0), kq_amt, kq_pct)
+        
+        # Update USD/KRW
+        u_amt, u_pct = parse_change(changes.get('USD/KRW', '-'))
+        self.usd_widget.update_data(rate, u_amt, u_pct)
 
     def update_account_info(self, data):
         """Update account info labels."""
         balance = data.get("balance", {})
-        
         total_asset = balance.get("total_asset", 0)
-        deposit = balance.get("deposit", 0)
-        total_pnl = balance.get("total_pnl", 0)
         
-        # Helper to format
         def fmt(val):
             return f"{val:,.0f}" if val else "0"
             
         self.asset_label.setText(f"{language_manager.get_text('total_asset')} {fmt(total_asset)}")
-        self.deposit_label.setText(f"{language_manager.get_text('deposit')} {fmt(deposit)}")
-        
-        # PnL with color
-        pnl_str = fmt(total_pnl)
-        if total_pnl > 0:
-            self.pnl_label.setText(f"{language_manager.get_text('total_pnl')} +{pnl_str}")
-            self.pnl_label.setStyleSheet("color: #ff5252; font-weight: bold;")
-        elif total_pnl < 0:
-            self.pnl_label.setText(f"{language_manager.get_text('total_pnl')} {pnl_str}")
-            self.pnl_label.setStyleSheet("color: #448aff; font-weight: bold;")
-        else:
-            self.pnl_label.setText(f"{language_manager.get_text('total_pnl')} {pnl_str}")
-            self.pnl_label.setStyleSheet("color: white;")
 
     def _create_status_indicator(self, text, icon_name, color):
         widget = QWidget()
@@ -217,7 +283,7 @@ class HeaderBar(QFrame):
 
     def update_status(self, target: str, status: bool):
         """Update status icons (API, DB, WS)."""
-        color = "#4caf50" if status else "#f44336" # Green / Red
+        color = "#4ec9b0" if status else "#f14c4c" # Green / Red (Premium)
         icon_map = {
             "API": ("fa5s.circle", self.api_status),
             "DB": ("fa5s.database", self.db_status),

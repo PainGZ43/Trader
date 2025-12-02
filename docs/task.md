@@ -6,7 +6,7 @@
     - [x] 기술 스택 및 라이브러리 정의 <!-- id: 2 -->
     - [x] 데이터베이스 스키마 정의 (초안) <!-- id: 3 -->
     - [x] 추가 기능 및 고려사항 점검 <!-- id: 3-1 -->
-- [ ] 2단계: 상세 설계 <!-- id: 4 -->
+- [x] 2단계: 상세 설계 <!-- id: 4 -->
     - [x] **데이터 수집 및 처리 모듈** (`design_data_module.md`) <!-- id: 5 -->
         - [x] 키움 공식 REST API (Bridge 제거), OAuth2 토큰 관리
         - [x] 실시간(WebSocket) 및 과거(REST) 데이터 수집 구조
@@ -26,7 +26,7 @@
         - [x] 메인 윈도우: Dock Widget 구조, 실시간 차트/호가창
         - [x] 설정: 전략 파라미터 튜닝, 관심종목 관리, 테마(Dark/Light) 선택
         - [x] **Refinement**: Quick Control, Notification History, Panic Safety, Workspace Persistence 추가 반영
-- [ ] 3단계: 구현 (Implementation) <!-- id: 9 -->
+- [x] 3단계: 구현 (Implementation) <!-- id: 9 -->
     - [x] **환경 설정 (Environment Setup)** <!-- id: 10 -->
         - [x] Python 3.10+ (64-bit) 설치 및 가상환경(venv) 구성
         - [x] 필수 라이브러리 설치 (`PyQt6`, `pandas`, `websockets`, `requests`, `ta-lib`, `torch`/`tensorflow`)
@@ -269,7 +269,7 @@
             - [x] Real/Paper 모드 전환 기능 검증
             - [x] 전체 시나리오 통합 테스트 (verify_integration.py)
             - [x] 다국어 지원 (한국어/영어) 구현
-    - [ ] **통합 테스트 및 배포** <!-- id: 16 -->
+    - [x] **통합 테스트 및 배포** <!-- id: 16 -->
         - [x] **배포 환경 개선 (Deployment Refinement)**
             - [x] AppData 경로 처리 (Config, DB, Log) 구현
             - [x] 배포 경로 검증 테스트 (`test_deployment_paths.py`) 추가
@@ -290,9 +290,9 @@
         - [x] Build Script (PyInstaller)
             - [x] Create `build.py`
             - [x] Test executable generation (Paused per user request)
-        - [ ] 배포 패키징 (PyInstaller) 및 사용자 매뉴얼 작성
+        - [x] 배포 패키징 (PyInstaller) 및 사용자 매뉴얼 작성
             - [x] PyInstaller 빌드 스크립트 작성 (`scripts/build_exe.py`)
-            - [ ] 실행 파일 생성 및 테스트
+            - [x] 실행 파일 생성 및 테스트
             - [x] 사용자 매뉴얼 (`docs/USER_MANUAL.md`) 작성
 
 ## UI/UX Phase 1: Functional Normalization
@@ -300,3 +300,4 @@
 - [x] **OrderPanel**: Implement Quick Qty logic (Link Account Data)
 - [x] **Dashboard**: Add "No Data / Select Stock" Empty State
 - [x] **OrderBook**: Fix fixed width & add empty states
+- [x] **Macro Indicators**: Implement Naver Finance scraping for KOSPI/KOSDAQ/USD-KRW with detailed change info

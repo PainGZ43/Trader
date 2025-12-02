@@ -6,12 +6,12 @@ import pandas as pd
 from datetime import datetime
 import numpy as np
 
-# Premium Colors
-COLOR_UP = "#FF4560"   # Red (Korean Market Up)
-COLOR_DOWN = "#0081F2" # Blue (Korean Market Down)
+# Premium Colors (Matched with OrderBook)
+COLOR_UP = "#ff6b6b"   # Red (Korean Market Up / Bid)
+COLOR_DOWN = "#54a0ff" # Blue (Korean Market Down / Ask)
 COLOR_BG = "#1e1e1e"
-COLOR_GRID = "#333333"
-COLOR_TEXT = "#e0e0e0"
+COLOR_GRID = "#2d2d2d" # Lighter grid
+COLOR_TEXT = "#cccccc"
 COLOR_CROSSHAIR = "#ffffff"
 
 class DateAxisItem(pg.AxisItem):
@@ -127,6 +127,7 @@ class ChartWidget(QWidget):
         """
         Update chart with new DataFrame.
         df columns: ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+        Optional columns: 'MA5', 'MA20', 'MA60', 'BB_UPPER', 'BB_LOWER'
         """
         if df.empty:
             return
@@ -140,13 +141,13 @@ class ChartWidget(QWidget):
         
         # Prepare Data
         self.timestamps = df['timestamp'].tolist()
+        x = range(len(self.timestamps))
         
         # Set Custom Axis
         axis = DateAxisItem(self.timestamps, orientation='bottom')
         self.volume_plot.setAxisItems({'bottom': axis})
         
         candle_data = []
-        volume_items = []
         
         for i, row in enumerate(df.itertuples()):
             # Candle Data: (index, open, close, low, high)
@@ -161,8 +162,29 @@ class ChartWidget(QWidget):
         self.candle_item = CandlestickItem(candle_data)
         self.price_plot.addItem(self.candle_item)
         
-        # Auto Range
-        # self.price_plot.autoRange() # Optional, sometimes better to let user control
+        # --- Plot Indicators ---
+        # Moving Averages
+        if 'MA5' in df.columns:
+            self.price_plot.plot(x, df['MA5'].values, pen=pg.mkPen('#ff9f43', width=1.5)) # Orange
+        if 'MA20' in df.columns:
+            self.price_plot.plot(x, df['MA20'].values, pen=pg.mkPen('#feca57', width=1.5)) # Yellow
+        if 'MA60' in df.columns:
+            self.price_plot.plot(x, df['MA60'].values, pen=pg.mkPen('#1dd1a1', width=1.5)) # Green
+        if 'MA120' in df.columns:
+            self.price_plot.plot(x, df['MA120'].values, pen=pg.mkPen('#5f27cd', width=1.5)) # Purple
+
+        # Bollinger Bands
+        if 'BB_UPPER' in df.columns and 'BB_LOWER' in df.columns:
+            upper = df['BB_UPPER'].values
+            lower = df['BB_LOWER'].values
+            # Fill between bands (requires FillBetweenItem or just lines)
+            # For simplicity, just lines first, or use FillBetweenItem if available in this version
+            p1 = self.price_plot.plot(x, upper, pen=pg.mkPen('#ff6b6b', width=1, style=Qt.PenStyle.DotLine))
+            p2 = self.price_plot.plot(x, lower, pen=pg.mkPen('#ff6b6b', width=1, style=Qt.PenStyle.DotLine))
+            
+            # Fill
+            fill = pg.FillBetweenItem(p1, p2, brush=pg.mkBrush(255, 107, 107, 30))
+            self.price_plot.addItem(fill)
 
     def mouse_moved(self, evt):
         pos = evt[0]
@@ -174,8 +196,5 @@ class ChartWidget(QWidget):
             if 0 <= index < len(self.timestamps):
                 self.v_line.setPos(index)
                 self.h_line.setPos(mouse_point.y())
-                
-                # Update Label (Optional: could emit signal to update status bar)
-                # ts = self.timestamps[index]
-                # price = mouse_point.y()
+
 

@@ -18,16 +18,10 @@ class KiwoomRestClient:
     def __init__(self):
         self.logger = get_logger("KiwoomRestClient")
         
-        # Determine Mode
-        self.is_mock_server = config.get("MOCK_MODE", True) 
-        self.offline_mode = False 
-        
-        if self.is_mock_server:
-            self.base_url = self.BASE_URL_MOCK
-            self.logger.info("Initialized in MOCK SERVER Mode")
-        else:
-            self.base_url = self.BASE_URL_REAL
-            self.logger.info("Initialized in REAL SERVER Mode")
+        # Determine Mode based on Config (Default to Real if not specified)
+        # We will refine this dynamically based on the Key Type later.
+        self.base_url = self.BASE_URL_REAL
+        self.is_mock_server = False
 
         # Override if explicitly set
         if config.get("KIWOOM_API_URL"):
@@ -36,8 +30,14 @@ class KiwoomRestClient:
         self.access_token = None
         self.token_expiry = None
         
-        # Rate Limiter: e.g., 5 requests per second
+        # Rate Limiter: Global (e.g., 5 requests per second)
         self.rate_limiter = RateLimiter(max_tokens=5, refill_rate=5)
+        
+        # Specific Rate Limiters for sensitive TRs
+        self.specific_limiters = {
+            "ka10004": RateLimiter(max_tokens=1, refill_rate=1), # Market Condition: 1 req/sec
+            "opt10080": RateLimiter(max_tokens=1, refill_rate=0.5), # Minute Candle: 1 req/2sec (conservative)
+        }
         
         self.session = None
 
@@ -54,19 +54,12 @@ class KiwoomRestClient:
         """
         Issue Access Token using KeyManager's active key.
         """
-        if self.offline_mode:
-            self.logger.info("[OFFLINE] Token issued successfully.")
-            self.access_token = "MOCK_TOKEN"
-            return self.access_token
-
         # Check if current token is valid
         if self.access_token and self.token_expiry:
             now = datetime.now()
             if isinstance(self.token_expiry, datetime):
                 if now < self.token_expiry - timedelta(minutes=1): # Buffer
                     return self.access_token
-            # If it's not datetime (e.g. initial load or raw value), proceed to refresh or handle logic
-            # For now, let's assume we always store datetime if we want to cache.
 
         # Lazy import to avoid circular dependency if any
         from data.key_manager import key_manager
@@ -78,23 +71,13 @@ class KiwoomRestClient:
 
         app_key = active_key["app_key"]
         secret_key = active_key["secret_key"]
+        key_type = active_key.get("type", "REAL")
         
         # Dynamically update base_url based on active key type
-        # This ensures we use the correct server even if config hasn't reloaded
-        # Dynamically update base_url based on active key type
-        # This ensures we use the correct server even if config hasn't reloaded
-        key_type = active_key.get("type")
-        
-        if key_type == "VIRTUAL":
-            self.logger.info("Using VIRTUAL key. Switching to Offline/Mock Mode.")
-            self.offline_mode = True
-            self.is_mock_server = True
-            self.access_token = "VIRTUAL_TOKEN"
-            return self.access_token
-            
         if key_type == "MOCK":
             self.base_url = self.BASE_URL_MOCK
             self.is_mock_server = True
+            self.logger.info("Using MOCK Key. Switching to Mock API Server.")
         else:
             self.base_url = self.BASE_URL_REAL
             self.is_mock_server = False
@@ -154,7 +137,7 @@ class KiwoomRestClient:
         """
         Revoke Access Token.
         """
-        if self.offline_mode or not self.access_token:
+        if not self.access_token:
             return True
 
         from data.key_manager import key_manager
@@ -194,11 +177,13 @@ class KiwoomRestClient:
         """
         Wrapper for HTTP requests with Rate Limiting and Auto Auth.
         """
-        if self.offline_mode:
-            self.logger.debug(f"[OFFLINE] Request: {method} {endpoint} TR:{tr_id}")
-            return self._get_mock_response(endpoint, tr_id, data)
-
+        # Global Limit
         await self.rate_limiter.acquire()
+        
+        # Specific Limit (based on api_id or tr_id)
+        target_id = api_id or tr_id
+        if target_id and target_id in self.specific_limiters:
+            await self.specific_limiters[target_id].acquire()
         
         if not self.access_token:
             token = await self.get_token()
@@ -210,21 +195,11 @@ class KiwoomRestClient:
             "Content-Type": "application/json;charset=UTF-8"
         }
         
-        # Some endpoints might need appkey/secret in headers too? 
-        # Usually Bearer token is enough for OAuth2.
-        # But if needed, we can add them.
-        
         if tr_id:
             headers["tr_id"] = tr_id
         if api_id:
             headers["api-id"] = api_id
             
-        # [PATCH] In Mock Mode, use internal mock for Market Indices (mrkcond) 
-        # because mockapi.kiwoom.com often doesn't return valid index data.
-        if self.is_mock_server and "mrkcond" in endpoint:
-             self.logger.info(f"[MOCK] Returning internal mock data for {endpoint}")
-             return self._get_mock_response(endpoint, tr_id, data)
-        
         session = await self._get_session()
         url = f"{self.base_url}{endpoint}"
         
@@ -250,48 +225,6 @@ class KiwoomRestClient:
             self.logger.error(f"Request exception: {e}")
             return None
 
-    def _get_mock_response(self, endpoint, tr_id, data):
-        """Helper to generate mock responses."""
-        import random
-        
-        # Market Index (KOSPI/KOSDAQ)
-        if "mrkcond" in endpoint or tr_id == "ka10004":
-            mrkt_tp = data.get("mrkt_tp", "")
-            stk_cd = data.get("stk_cd", "")
-            
-            if mrkt_tp == "1" or stk_cd == "001": # KOSPI
-                # Return structure matching PDF
-                return {
-                    "inds_netprps": [
-                        {
-                            "inds_cd": "001_AL",
-                            "inds_nm": "종합(KOSPI)",
-                            "cur_prc": "2500.50",
-                            "flu_rt": "+0.50",
-                            "volume": "500000"
-                        }
-                    ]
-                }
-            elif stk_cd == "101": # KOSDAQ
-                price = 850.0 + random.uniform(-5.0, 5.0)
-                change = random.uniform(-1.0, 1.0)
-                return {"output": {"price": f"{price:.2f}", "change": f"{change:+.2f}", "volume": "200000"}}
-            else: # Normal Stock
-                return {"output": {"price": "70000", "change": "+1.0", "volume": "1000000"}}
-                
-        elif "stock/price" in endpoint or tr_id == "FHKST01010100": 
-            return {"output": {"price": "70000", "change": "+1.0", "volume": "1000000"}}
-        elif "order" in endpoint or tr_id == "TT80012" or tr_id == "ct80012": 
-            return {"rt_cd": "0", "msg_cd": "0000", "msg1": "Order Accepted", "output": {"order_no": "123456"}}
-        elif "balance" in endpoint or tr_id == "OPW00018":
-            return {
-                "output": {
-                    "single": [{"pres_asset_total": "20000000", "deposit": "9500000", "total_purchase_amt": "10000000", "total_eval_amt": "10500000", "total_eval_profit_loss_amt": "500000", "total_earning_rate": "5.0"}],
-                    "multi": [{"code": "005930", "name": "Samsung Elec", "qty": "10", "avg_price": "68000", "cur_price": "70000", "eval_amt": "700000", "earning_rate": "2.9"}]
-                }
-            }
-        return {}
-
     # --- Market Data ---
 
     async def get_current_price(self, symbol):
@@ -303,15 +236,9 @@ class KiwoomRestClient:
     async def get_market_index(self, market_code):
         """
         Get Market Index (KOSPI: 001)
-        Based on PDF: ka10004 (mrkcond) with mrkt_tp="1" (KOSPI)
         """
         endpoint = "/api/dostk/mrkcond"
         tr_id = "ka10004"
-        
-        # market_code mapping
-        # 001 -> 1 (KOSPI)
-        # 101 -> 2 (KOSPI200) - Approximation or need to check PDF for KOSDAQ
-        # For now, we focus on KOSPI (001 -> 1)
         
         mrkt_tp = "1" # Default to KOSPI
         if market_code == "001":
@@ -346,10 +273,6 @@ class KiwoomRestClient:
             "tick": "1" if interval == "minute" else None
         }
         
-        # In Mock Mode, return dummy data
-        if self.is_mock_server:
-            return self._get_mock_ohlcv(symbol, interval)
-            
         return await self.request("POST", endpoint, data=data, api_id=tr_id)
 
     async def get_code_list(self, market_type="0"):
@@ -358,53 +281,28 @@ class KiwoomRestClient:
         market_type: "0" (KOSPI), "10" (KOSDAQ)
         """
         endpoint = "/api/dostk/code_list"
-        tr_id = "GetCodeListByMarket" # This is usually an OpenAPI method, not TR
+        tr_id = "GetCodeListByMarket" 
         
         data = {"market": market_type}
         
-        if self.is_mock_server:
-            return ["005930", "000660", "035420"] # Mock
-            
         return await self.request("POST", endpoint, data=data, api_id=tr_id)
-
-    def _get_mock_ohlcv(self, symbol, interval):
-        """Generate mock OHLCV data."""
-        import random
-        data = []
-        price = 70000
-        for i in range(10):
-            open_p = price
-            close_p = price + random.randint(-1000, 1000)
-            high_p = max(open_p, close_p) + random.randint(0, 500)
-            low_p = min(open_p, close_p) - random.randint(0, 500)
-            vol = random.randint(1000, 50000)
-            data.append({
-                "date": (datetime.now() - timedelta(days=i)).strftime("%Y%m%d"),
-                "open": str(open_p),
-                "high": str(high_p),
-                "low": str(low_p),
-                "close": str(close_p),
-                "volume": str(vol)
-            })
-        return {"output": data}
 
     # --- Order Management ---
 
     async def send_order(self, symbol, order_type, qty, price=0, trade_type="00"):
-        # Correct Endpoint from PDF: /api/dostk/ordr
         endpoint = "/api/dostk/ordr"
         
         # Determine TR ID based on Server Mode
         if self.is_mock_server:
             # Mock Server TR IDs (from PDF)
             if str(order_type) == "1": # Buy
-                tr_id = "kt10000"
+                tr_id = "kt10000" # Mock might use same or different, usually same for Stock
             elif str(order_type) == "2": # Sell
                 tr_id = "kt10001"
             else:
                 tr_id = "kt10000" 
         else:
-            # Real Server TR IDs (Assuming same structure based on PDF)
+            # Real Server TR IDs
             if str(order_type) == "1": # Buy
                 tr_id = "kt10000"
             elif str(order_type) == "2": # Sell
@@ -412,72 +310,26 @@ class KiwoomRestClient:
             else:
                 tr_id = "kt10000"
         
-        # Need account number from active key or storage
-        from data.key_manager import key_manager
-        active_key = key_manager.get_active_key()
-        acc_no = active_key["account_no"] if active_key else ""
-        
-        # Map parameters to API Spec (Page 422)
         data = {
-            # "acc_no": acc_no, # PDF Page 422 does NOT list acc_no in Body! It might be inferred from Token?
-            # Wait, let's check PDF again. Page 422 Request Body:
-            # dmst_stex_tp, stk_cd, ord_qty, ord_uv, trde_tp, cond_uv
-            # It does NOT list acc_no.
-            # However, usually acc_no is required. 
-            # Let's try WITHOUT acc_no first as per PDF, or maybe it's in Header?
-            # PDF Headers: api-id, authorization, cont-yn, next-key. No acc_no.
-            # Maybe the Token is bound to the account?
-            # Let's include acc_no just in case, or remove it if it fails.
-            # Actually, standard Kiwoom REST usually requires acc_no. 
-            # But if PDF doesn't say so... let's try to follow PDF strictly.
-            
             "dmst_stex_tp": "KRX",
             "stk_cd": symbol,
             "ord_qty": str(qty),
             "ord_uv": str(price),
             "trde_tp": trade_type,
-            "cond_uv": "0" # Condition price, usually 0
+            "cond_uv": "0" 
         }
-        
-        # If acc_no is needed, it might be a different field or implied.
-        # Let's keep acc_no for now but use the keys above.
-        # Wait, if I send extra keys, it might be fine.
-        # But let's be precise.
         
         self.logger.info(f"Sending Order: {order_type} {symbol} {qty}@{price} (TR: {tr_id}, URL: {endpoint})")
         return await self.request("POST", endpoint, data=data, api_id=tr_id)
 
     async def cancel_order(self, order_no, symbol, qty):
-        # Correct Endpoint from PDF: /api/dostk/ordr
         endpoint = "/api/dostk/ordr"
+        tr_id = "kt10003" 
         
-        if self.is_mock_server:
-            tr_id = "kt10003"
-        else:
-            tr_id = "kt10003" 
-        
-        from data.key_manager import key_manager
-        active_key = key_manager.get_active_key()
-        acc_no = active_key["account_no"] if active_key else ""
-        
-        # PDF Page 428 (Cancel) Body:
-        # orig_ord_no, ord_no(Response?), base_orig_ord_no(Response?)
-        # Wait, Page 428 Request Body:
-        # orig_ord_no (Y), stk_cd (not listed?), cncl_qty (not listed?)
-        # Let's check Page 428 again in my thought process...
-        # [L24] Body orig_ord_no 원주문번호 String Y 7
-        # [L33] Body ord_no ... (Response)
-        # It seems incomplete in extraction.
-        # Gold Spot Cancel (Page 447) had: orig_ord_no, stk_cd, cncl_qty.
-        # Stock Cancel likely needs:
-        # org_ord_no (Original Order No)
-        # ord_qty (Cancel Qty? or cncl_qty?)
-        # stk_cd?
-        # Let's guess based on Gold Spot:
         data = {
-            "orig_ord_no": order_no, # Original Order No
+            "orig_ord_no": order_no, 
             "stk_cd": symbol,
-            "cncl_qty": str(qty), # Assuming cncl_qty based on Gold Spot
+            "cncl_qty": str(qty), 
             "dmst_stex_tp": "KRX"
         }
         
@@ -489,7 +341,6 @@ class KiwoomRestClient:
     async def get_account_balance(self):
         """
         Get Account Balance and Withdrawable Cash.
-        Based on PDF: kt00018 (/api/dostk/acnt)
         """
         endpoint = "/api/dostk/acnt"
         tr_id = "kt00018"
@@ -498,18 +349,11 @@ class KiwoomRestClient:
         active_key = key_manager.get_active_key()
         acc_no = active_key["account_no"] if active_key else ""
         
-        # PDF Params:
-        # qry_tp: 1 (Balance/Asset), 2 (Deposit?) - PDF says 1:Balance
-        # dmst_stex_tp: KRX
         data = {
             "qry_tp": "1",
             "dmst_stex_tp": "KRX",
-            "acc_no": acc_no # Usually required even if not explicitly in body table sometimes
+            "acc_no": acc_no 
         }
-        
-        # if self.is_mock_server:
-        #      return { ... } 
-        # Removed to allow fetching from Mock API Server
         
         return await self.request("POST", endpoint, data=data, api_id=tr_id)
 
@@ -519,25 +363,17 @@ class KiwoomRestClient:
         """
         Load Condition List.
         """
-        endpoint = "/api/dostk/condition_load" # Hypothetical
+        endpoint = "/api/dostk/condition_load" 
         tr_id = "GetConditionLoad"
         
-        if self.is_mock_server:
-            return {
-                "output": [
-                    {"index": "001", "name": "Golden Cross"},
-                    {"index": "002", "name": "Bollinger Breakout"}
-                ]
-            }
-            
-        # Note: Kiwoom OpenAPI usually triggers event OnReceiveConditionVer
-        # For REST, we assume a synchronous return or polling.
-        return await self.request("POST", endpoint, api_id=tr_id)
+        # API requires a body, even if empty
+        data = {}
+        
+        return await self.request("POST", endpoint, data=data, api_id=tr_id)
 
     async def send_condition(self, screen_no, condition_name, condition_index, search_type):
         """
         Send Condition Search Request.
-        search_type: "0" (Realtime), "1" (One-time)
         """
         endpoint = "/api/dostk/condition_send"
         tr_id = "SendCondition"

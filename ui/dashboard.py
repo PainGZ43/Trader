@@ -3,7 +3,11 @@ from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from ui.widgets.chart_widget import ChartWidget
 from ui.widgets.order_book_widget import OrderBookWidget
 import pandas as pd
+from datetime import datetime
 from core.language import language_manager
+from data.indicator_engine import indicator_engine
+from data.data_collector import data_collector
+import asyncio
 
 class Dashboard(QWidget):
     # Signal for thread-safe UI update
@@ -23,6 +27,9 @@ class Dashboard(QWidget):
         
         self.pending_chart_data = None
         self.pending_orderbook_data = None
+        
+        self.current_symbol = None
+        self.history_data = pd.DataFrame() # Stores OHLCV + Indicators
 
     def init_ui(self):
         layout = QVBoxLayout(self)
@@ -48,7 +55,6 @@ class Dashboard(QWidget):
         
         # Order Book Area
         self.order_book_widget = OrderBookWidget()
-        # self.order_book_widget.setFixedWidth(300) # REMOVED fixed width
         splitter.addWidget(self.order_book_widget)
         
         splitter.setStretchFactor(0, 1) # Chart takes available space
@@ -67,6 +73,31 @@ class Dashboard(QWidget):
         # Default to Welcome
         self.stack_layout.setCurrentIndex(0)
 
+    def set_active_symbol(self, symbol):
+        """
+        Set the active symbol and load initial data.
+        """
+        self.current_symbol = symbol
+        self.stack_layout.setCurrentIndex(1)
+        
+        # Clear previous data
+        self.history_data = pd.DataFrame()
+        self.chart_widget.update_chart(self.history_data)
+        
+        # Load initial data (Async task)
+        asyncio.create_task(self._load_initial_data(symbol))
+
+    async def _load_initial_data(self, symbol):
+        """
+        Fetch recent data from DataCollector (DB).
+        """
+        df = await data_collector.get_recent_data(symbol, limit=200)
+        if not df.empty:
+            # Calculate Indicators
+            df = indicator_engine.add_indicators(df)
+            self.history_data = df
+            self.pending_chart_data = df # Trigger update
+
     def on_data_received(self, data):
         """
         Callback called by DataCollector (background thread).
@@ -79,19 +110,66 @@ class Dashboard(QWidget):
         Slot to receive data and queue it for update.
         """
         event_type = data.get("type")
+        symbol = data.get("code")
         
         if event_type == "REALTIME":
-            # Switch to Active View if on Welcome Screen
-            if self.stack_layout.currentIndex() == 0:
-                self.stack_layout.setCurrentIndex(1)
+            if symbol != self.current_symbol:
+                return
+
+            # Update History Data
+            price = float(data.get("price", 0))
+            volume = int(data.get("volume", 0))
+            timestamp = datetime.now().replace(second=0, microsecond=0)
+            
+            if self.history_data.empty:
+                # Initialize if empty
+                new_row = pd.DataFrame([{
+                    "timestamp": timestamp,
+                    "open": price, "high": price, "low": price, "close": price, "volume": volume
+                }])
+                self.history_data = new_row
+            else:
+                last_ts = self.history_data.iloc[-1]['timestamp']
                 
+                if timestamp > last_ts:
+                    # New Candle
+                    new_row = pd.DataFrame([{
+                        "timestamp": timestamp,
+                        "open": price, "high": price, "low": price, "close": price, "volume": volume
+                    }])
+                    self.history_data = pd.concat([self.history_data, new_row], ignore_index=True)
+                else:
+                    # Update Current Candle
+                    idx = self.history_data.index[-1]
+                    self.history_data.at[idx, 'high'] = max(self.history_data.at[idx, 'high'], price)
+                    self.history_data.at[idx, 'low'] = min(self.history_data.at[idx, 'low'], price)
+                    self.history_data.at[idx, 'close'] = price
+                    self.history_data.at[idx, 'volume'] += volume 
+            
+            # Ensure Float for Indicators
+            cols = ['open', 'high', 'low', 'close', 'volume']
+            for c in cols:
+                if c in self.history_data.columns:
+                    self.history_data[c] = self.history_data[c].astype(float)
+
+            # Recalculate Indicators (Optimize: only if needed or every N ticks?)
+            # For now, calc every tick for smooth look
+            try:
+                self.history_data = indicator_engine.add_indicators(self.history_data)
+                # print(f"Indicators Calculated. Columns: {len(self.history_data.columns)}") # Debug
+            except Exception as e:
+                print(f"Indicator Error: {e}")
+            
+            # Limit History Size (Keep last 1000 candles)
+            if len(self.history_data) > 1000:
+                self.history_data = self.history_data.iloc[-1000:].reset_index(drop=True)
+            
             # Queue for chart update
-            # Assuming data contains candle info or tick info that we aggregate
-            # For now, let's assume we get a full candle or tick
-            pass 
+            self.pending_chart_data = self.history_data
             
         elif event_type == "ORDERBOOK":
-            self.pending_orderbook_data = data
+            if symbol == self.current_symbol:
+                self.pending_orderbook_data = data
 
     def refresh_ui(self):
         """
@@ -103,6 +181,8 @@ class Dashboard(QWidget):
             self.order_book_widget.update_orderbook(asks, bids)
             self.pending_orderbook_data = None
             
-        # Chart update logic would go here (e.g. appending new candle)
-        # For demo, we can generate dummy data if needed
+        if self.pending_chart_data is not None:
+            self.chart_widget.update_chart(self.pending_chart_data)
+            self.pending_chart_data = None
+
 

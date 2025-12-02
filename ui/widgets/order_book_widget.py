@@ -1,6 +1,48 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QBrush, QLinearGradient
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView, QStyledItemDelegate
+from PyQt6.QtCore import Qt, pyqtSignal, QRectF
+from PyQt6.QtGui import QColor, QBrush, QPainter, QPen
+
+class OrderBookDelegate(QStyledItemDelegate):
+    """
+    Custom Delegate to draw volume bars behind the text.
+    Expects Qt.ItemDataRole.UserRole to contain the volume ratio (0.0 to 1.0).
+    """
+    def __init__(self, parent=None, is_ask=True):
+        super().__init__(parent)
+        self.is_ask = is_ask
+        # Colors matching the theme
+        self.ask_color = QColor(84, 160, 255, 40)  # Blue with low opacity
+        self.bid_color = QColor(255, 107, 107, 40) # Red with low opacity
+        self.ask_bar_color = QColor(84, 160, 255, 80)
+        self.bid_bar_color = QColor(255, 107, 107, 80)
+
+    def paint(self, painter: QPainter, option, index):
+        # Draw default background (selection etc)
+        # self.initStyleOption(option, index) # Optional if we want default behavior
+        
+        # Get Volume Ratio
+        ratio = index.data(Qt.ItemDataRole.UserRole)
+        
+        if ratio is not None and isinstance(ratio, float):
+            painter.save()
+            
+            # Determine Bar Rect
+            rect = option.rect
+            width = rect.width() * ratio
+            
+            bar_rect = QRectF(rect.x(), rect.y(), width, rect.height())
+            
+            # Choose Color
+            color = self.ask_bar_color if self.is_ask else self.bid_bar_color
+            
+            # Draw Bar
+            painter.fillRect(bar_rect, color)
+            
+            painter.restore()
+            
+        # Draw Text
+        super().paint(painter, option, index)
+
 
 class OrderBookWidget(QWidget):
     order_clicked = pyqtSignal(float) # Signal price when clicked
@@ -19,19 +61,26 @@ class OrderBookWidget(QWidget):
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.cellDoubleClicked.connect(self.on_cell_double_clicked)
         
-        # Style
+        # Set Delegates
+        self.ask_delegate = OrderBookDelegate(self.table, is_ask=True)
+        self.bid_delegate = OrderBookDelegate(self.table, is_ask=False)
+        
+        # Apply delegates to Volume columns (0 for Ask, 2 for Bid)
+        # Actually, in our layout: Col 0 is Ask Vol, Col 1 is Price, Col 2 is Bid Vol?
+        # Let's check update_orderbook logic.
+        # _set_row: 
+        #   if is_ask: setItem(row, 0, vol), setItem(row, 2, "")
+        #   else: setItem(row, 0, ""), setItem(row, 2, vol)
+        # So Col 0 is Ask Vol, Col 2 is Bid Vol.
+        
+        self.table.setItemDelegateForColumn(0, self.ask_delegate)
+        self.table.setItemDelegateForColumn(2, self.bid_delegate)
+
+        # Style (Basic overrides, main style in QSS)
         self.table.setStyleSheet("""
             QTableWidget {
-                background-color: #1e1e1e;
-                color: white;
-                gridline-color: #333;
+                gridline-color: #2d2d2d;
                 border: none;
-            }
-            QHeaderView::section {
-                background-color: #2d2d2d;
-                color: white;
-                padding: 4px;
-                border: 1px solid #333;
             }
         """)
         
@@ -49,7 +98,6 @@ class OrderBookWidget(QWidget):
         asks: list of (price, volume) sorted by price ascending
         bids: list of (price, volume) sorted by price descending
         """
-        # Clear table logic if needed, but here we just update cells
         if not asks and not bids:
             self.table.setRowCount(1)
             item = QTableWidgetItem("Waiting for data...")
@@ -62,66 +110,60 @@ class OrderBookWidget(QWidget):
              self.table.setRowCount(20)
              self.table.clearSpans()
         
-        # Asks (Sell) - Display from high to low (so lowest ask is near center)
+        # Calculate Max Volume for Ratio
+        max_vol = 1
+        all_vols = [v for p, v in asks] + [v for p, v in bids]
+        if all_vols:
+            max_vol = max(all_vols)
+        
+        # Asks (Sell) - Display from high to low
         # We want the lowest ask at row 9, highest ask at row 0
-        # asks usually come sorted by price ascending (lowest first)
-        # So we take first 10 asks, reverse them to put high price at top
-        
-        display_asks = sorted(asks, key=lambda x: x[0], reverse=True)[-10:] 
-        # Actually standard order book view:
-        # Top: High Ask
-        # ...
-        # Center: Low Ask
-        # Center: High Bid
-        # ...
-        # Bottom: Low Bid
-        
-        # So we need asks sorted descending.
-        # If input asks is [100, 101, 102], we want to display 102, 101, 100.
-        
         sorted_asks = sorted(asks, key=lambda x: x[0], reverse=True)
-        # Take last 10 if more than 10, or pad
         if len(sorted_asks) > 10:
             sorted_asks = sorted_asks[-10:]
             
         # Fill Asks (Rows 0-9)
         for i in range(10):
-            row_idx = 9 - i # Fill from bottom of ask section (9) up to 0
+            row_idx = 9 - i 
             if i < len(asks):
                 price, vol = asks[i] # asks[0] is lowest ask
-                self._set_row(row_idx, price, vol, is_ask=True)
+                ratio = vol / max_vol if max_vol > 0 else 0
+                self._set_row(row_idx, price, vol, is_ask=True, ratio=ratio)
             else:
                 self._clear_row(row_idx)
 
         # Fill Bids (Rows 10-19)
-        # Bids sorted descending (highest first). bids[0] is highest bid.
         for i in range(10):
             row_idx = 10 + i
             if i < len(bids):
                 price, vol = bids[i]
-                self._set_row(row_idx, price, vol, is_ask=False)
+                ratio = vol / max_vol if max_vol > 0 else 0
+                self._set_row(row_idx, price, vol, is_ask=False, ratio=ratio)
             else:
                 self._clear_row(row_idx)
 
-    def _set_row(self, row, price, vol, is_ask):
+    def _set_row(self, row, price, vol, is_ask, ratio=0.0):
         # Vol (Ask side)
         if is_ask:
-            self.table.setItem(row, 0, QTableWidgetItem(str(vol)))
+            item = QTableWidgetItem(f"{vol:,}")
+            item.setData(Qt.ItemDataRole.UserRole, ratio)
+            item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.table.setItem(row, 0, item)
             self.table.setItem(row, 2, QTableWidgetItem(""))
             color = QColor("#54a0ff") # Blueish for Asks
         else:
             self.table.setItem(row, 0, QTableWidgetItem(""))
-            self.table.setItem(row, 2, QTableWidgetItem(str(vol)))
+            item = QTableWidgetItem(f"{vol:,}")
+            item.setData(Qt.ItemDataRole.UserRole, ratio)
+            item.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            self.table.setItem(row, 2, item)
             color = QColor("#ff6b6b") # Reddish for Bids
             
         # Price
-        price_item = QTableWidgetItem(str(price))
+        price_item = QTableWidgetItem(f"{price:,}")
         price_item.setForeground(color)
         price_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         self.table.setItem(row, 1, price_item)
-        
-        # Background bar for volume (Simplified)
-        # In a real app, we would use a custom delegate to draw a bar
         
     def _clear_row(self, row):
         for col in range(3):

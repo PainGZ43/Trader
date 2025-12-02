@@ -197,8 +197,8 @@ class KeyManager:
         """
         Add a new key.
         """
-        # Check duplicate (only for non-virtual)
-        if key_type != "VIRTUAL" and await self.check_duplicate(app_key):
+        # Check duplicate
+        if await self.check_duplicate(app_key):
             self.logger.warning("Duplicate App Key detected.")
             return False
 
@@ -208,11 +208,6 @@ class KeyManager:
 
         key_uuid = str(uuid.uuid4())
         
-        # For Virtual, generate dummy account number if empty
-        if key_type == "VIRTUAL" and not account_no:
-            account_no = f"VIRTUAL-{key_uuid[:8]}"
-            expiry_date = "9999-12-31" # No expiry for virtual
-        
         # Save secure part
         secure_data = json.dumps({"app_key": app_key, "secret_key": secret_key})
         secure_storage.save(f"API_KEY_{key_uuid}", secure_data)
@@ -221,7 +216,7 @@ class KeyManager:
         new_key = {
             "uuid": key_uuid,
             "owner": owner,
-            "type": key_type, # "MOCK", "REAL", "VIRTUAL"
+            "type": key_type, # "MOCK", "REAL"
             "account_no": account_no,
             "expiry_date": expiry_date,
             "created_at": datetime.now().isoformat()
@@ -278,6 +273,13 @@ class KeyManager:
             return True
         return False
 
+    def is_auto_login_enabled(self) -> bool:
+        return self.metadata.get("auto_login_enabled", False)
+
+    def set_auto_login_enabled(self, enabled: bool):
+        self.metadata["auto_login_enabled"] = enabled
+        self._save_metadata()
+
     def set_active_key(self, key_uuid: str):
         """
         Set the currently active key.
@@ -289,15 +291,11 @@ class KeyManager:
             self._save_metadata()
             
             # Update Config MOCK_MODE
-            # For VIRTUAL, we can treat it as MOCK or keep previous state. 
-            # Let's treat VIRTUAL as MOCK for safety (no real trading).
-            is_mock = (target_key["type"] in ["MOCK", "VIRTUAL"])
+            is_mock = (target_key["type"] == "MOCK")
             self._update_config_file(is_mock)
             
             self.logger.info(f"Active key set to: {target_key['owner']} ({target_key['type']})")
             return True
-        return False
-
     def _update_config_file(self, is_mock: bool):
         # Simple yaml update
         settings_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "settings.yaml")
@@ -354,31 +352,6 @@ class KeyManager:
             result.append(item)
         return result
 
-    def get_active_key(self) -> Optional[Dict]:
-        """
-        Get the actual AppKey and SecretKey for the active entry.
-        Returns dict with app_key, secret_key, type, account_no, etc.
-        """
-        uuid = self.metadata["active_key_uuid"]
-        if not uuid:
-            return None
-            
-        meta = next((k for k in self.metadata["keys"] if k["uuid"] == uuid), None)
-        if not meta:
-            return None
-            
-        secure_json = secure_storage.get(f"API_KEY_{uuid}")
-        if not secure_json:
-            return None
-            
-        try:
-            keys = json.loads(secure_json)
-            result = meta.copy()
-            result.update(keys)
-            return result
-        except:
-            return None
-
     def check_expiration(self) -> List[str]:
         """
         Check for keys expiring within 7 days.
@@ -405,13 +378,6 @@ class KeyManager:
         self.metadata["expiry_alert_days"] = days
         self._save_metadata()
 
-    def is_auto_login_enabled(self) -> bool:
-        return self.metadata.get("auto_login_enabled", False)
-
-    def set_auto_login_enabled(self, enabled: bool):
-        self.metadata["auto_login_enabled"] = enabled
-        self._save_metadata()
-
     async def verify_key_by_uuid(self, uuid: str) -> bool:
         """
         Verify a specific key by UUID.
@@ -431,11 +397,6 @@ class KeyManager:
             keys = json.loads(secure_json)
             app_key = keys["app_key"]
             secret_key = keys["secret_key"]
-            
-            # Skip probe for VIRTUAL keys
-            if meta.get("type") == "VIRTUAL":
-                self._validation_cache[uuid] = True
-                return True
             
             # Use probe_key_info to get details including expiry
             info = await self.probe_key_info(app_key, secret_key)
@@ -467,6 +428,31 @@ class KeyManager:
         except:
             self._validation_cache[uuid] = False
             return False
+
+    def get_active_key(self) -> Optional[Dict]:
+        """
+        Get the actual AppKey and SecretKey for the active entry.
+        Returns dict with app_key, secret_key, type, account_no, etc.
+        """
+        uuid = self.metadata["active_key_uuid"]
+        if not uuid:
+            return None
+            
+        meta = next((k for k in self.metadata["keys"] if k["uuid"] == uuid), None)
+        if not meta:
+            return None
+            
+        secure_json = secure_storage.get(f"API_KEY_{uuid}")
+        if not secure_json:
+            return None
+            
+        try:
+            keys = json.loads(secure_json)
+            result = meta.copy()
+            result.update(keys)
+            return result
+        except:
+            return None
 
     def check_active_key_expiration(self) -> Optional[str]:
         """

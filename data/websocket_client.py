@@ -27,7 +27,14 @@ class WebSocketClient:
             self.secret_key = None
             
         self.ws_url = config.get("KIWOOM_WS_URL")
-        self.mock_mode = config.get("MOCK_MODE", True)
+        self.mock_mode = config.get("MOCK_MODE", False)
+        
+        # If Mock Mode, ensure we use Mock WS URL if different (Usually same for Kiwoom REST, but let's be safe)
+        # Actually, Kiwoom Mock REST uses mockapi.kiwoom.com, WS might be wss://mockapi.kiwoom.com/websocket/v1
+        # Let's assume standard is wss://openapi.kiwoom.com/websocket/v1 for Real.
+        # If user explicitly set KIWOOM_WS_URL, respect it.
+        # If not, and mock_mode is True, try to infer or use default.
+        # For now, we trust KIWOOM_WS_URL in config/env.
         
         self.websocket = None
         self.is_connected = False
@@ -40,13 +47,6 @@ class WebSocketClient:
         Establish WebSocket connection.
         Raises exception on failure.
         """
-        if self.mock_mode:
-            self.logger.info("[MOCK] WebSocket Connected (Simulated)")
-            self.is_connected = True
-            self._stop_event.clear()
-            asyncio.create_task(self._mock_stream())
-            return
-
         self.logger.info(f"Connecting to WebSocket: {self.ws_url}")
         self._stop_event.clear()
         
@@ -137,42 +137,6 @@ class WebSocketClient:
                 asyncio.create_task(self._reconnect())
                 break
 
-    def _switch_to_mock(self):
-        self.logger.warning("Switching to MOCK MODE due to connection failure.")
-        self.mock_mode = True
-        self.is_connected = True
-        asyncio.create_task(self._mock_stream())
-
-    async def _mock_stream(self):
-        """
-        Simulate real-time data stream.
-        """
-        import random
-        symbols = ["005930", "000660", "035420"]
-        indices = ["001", "101"] # KOSPI, KOSDAQ
-        
-        while not self._stop_event.is_set():
-            await asyncio.sleep(1) # 1 second interval
-            
-            # 1. Stock Data
-            symbol = random.choice(symbols)
-            price = random.randint(50000, 100000)
-            change = random.choice(["+0.5%", "-0.2%", "+1.2%", "0.0%"])
-            volume = random.randint(1000, 10000)
-            
-            data = {
-                "code": symbol,
-                "price": price,
-                "change": change,
-                "volume": volume,
-                "type": "REALTIME"
-            }
-            await self._handle_message(json.dumps(data))
-            
-            # 2. Index Data (JISU) - REMOVED per user request (Show '--' instead of fake data)
-            # idx_code = random.choice(indices)
-            # ...
-
     async def disconnect(self):
         """
         Close WebSocket connection.
@@ -187,10 +151,6 @@ class WebSocketClient:
         """
         Send subscription request.
         """
-        if self.mock_mode:
-            self.logger.info(f"[MOCK] Subscribed to {tr_key}")
-            return
-
         if not self.is_connected:
             self.logger.warning("Cannot subscribe: WebSocket not connected")
             return
