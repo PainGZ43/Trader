@@ -10,8 +10,8 @@ from core.logger import get_logger
 
 from ui.widgets.control_panel import ControlPanel
 from ui.widgets.order_panel import OrderPanel
+from ui.widgets.watchlist_widget import WatchlistWidget
 from ui.settings_dialog import SettingsDialog
-from ui.log_viewer import LogViewer
 from ui.log_viewer import LogViewer
 from core.event_bus import event_bus
 from core.language import language_manager
@@ -94,6 +94,12 @@ class MainWindow(QMainWindow):
         self.control_panel = ControlPanel()
         self.dock_left.setWidget(self.control_panel)
         
+        # Watchlist (Tabbed with Left Panel)
+        self.dock_watchlist = self._create_dock("Watchlist", Qt.DockWidgetArea.LeftDockWidgetArea)
+        self.watchlist_widget = WatchlistWidget()
+        self.dock_watchlist.setWidget(self.watchlist_widget)
+        self.tabifyDockWidget(self.dock_left, self.dock_watchlist)
+        
         # Right Panel (Order Book & Execution)
         self.dock_right = self._create_dock(language_manager.get_text("dock_execution"), Qt.DockWidgetArea.RightDockWidgetArea)
         self.order_panel = OrderPanel()
@@ -157,6 +163,7 @@ class MainWindow(QMainWindow):
         self.system_error_signal.connect(self._on_system_error)
         
         # 3. Connect UI Actions to Backend (Main Thread -> EventBus)
+        self.watchlist_widget.symbol_selected.connect(lambda code: event_bus.publish("symbol.changed", code))
         self.order_panel.send_order_signal.connect(lambda order: event_bus.publish("order.create", order))
         self.order_panel.panic_signal.connect(lambda action: event_bus.publish("system.panic", {"action": action}))
         self.control_panel.close_position_signal.connect(lambda code: event_bus.publish("order.close", {"code": code}))
