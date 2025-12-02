@@ -1,7 +1,9 @@
 import sys
 import os
+import asyncio
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import QTimer
+import qasync
 
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -9,11 +11,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from ui.main_window import MainWindow
 from core.logger import get_logger
 
-def verify_ui_launch():
+async def main():
     logger = get_logger("VerifyUI")
-    logger.info("Starting UI Verification...")
-    
-    app = QApplication(sys.argv)
+    logger.info("Starting UI Verification (Async)...")
     
     try:
         window = MainWindow()
@@ -28,20 +28,25 @@ def verify_ui_launch():
             logger.error("[FAIL] MainWindow.logger MISSING!")
             sys.exit(1)
             
-        # Close after 3 seconds
-        def close_app():
-            logger.info("Closing application...")
-            window.close()
-            app.quit()
-            
-        QTimer.singleShot(3000, close_app)
+        # Wait a bit
+        await asyncio.sleep(3)
         
-        app.exec()
-        logger.info("UI Verification Completed Successfully.")
+        logger.info("Closing application...")
+        window.close()
         
     except Exception as e:
         logger.error(f"UI Verification Failed: {e}")
         sys.exit(1)
+
+def verify_ui_launch():
+    app = QApplication(sys.argv)
+    loop = qasync.QEventLoop(app)
+    asyncio.set_event_loop(loop)
+    
+    with loop:
+        loop.run_until_complete(main())
+    
+    print("UI Verification Completed Successfully.")
 
 if __name__ == "__main__":
     verify_ui_launch()

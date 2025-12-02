@@ -301,3 +301,5 @@
 - [x] **Dashboard**: Add "No Data / Select Stock" Empty State
 - [x] **OrderBook**: Fix fixed width & add empty states
 - [x] **Macro Indicators**: Implement Naver Finance scraping for KOSPI/KOSDAQ/USD-KRW with detailed change info
+- [x] **Watchlist**: Group management, Real-time updates, Drag & Drop reordering
+- [x] **Chart Indicators**: Settings Dialog, Dynamic Sub-charts (RSI, MACD, etc.), Indicator Engine update

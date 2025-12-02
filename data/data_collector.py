@@ -36,6 +36,10 @@ class DataCollector:
         # Register callback
         self.ws_client.add_callback(self.on_realtime_data)
         self.ws_client.add_callback(self.macro_collector.on_realtime_data)
+        
+        # Subscribe to internal events
+        from core.event_bus import event_bus
+        event_bus.subscribe("watchlist.updated", self._on_watchlist_updated)
 
     def add_observer(self, callback):
         """
@@ -414,6 +418,32 @@ class DataCollector:
             await asyncio.sleep(60)
 
 
+
+    async def _on_watchlist_updated(self, event):
+        """
+        Handle watchlist update event.
+        event.data: {'codes': ['005930', ...]}
+        """
+        try:
+            data = event.data
+            codes = data.get("codes", [])
+            if not codes:
+                return
+                
+            self.logger.info(f"Updating Watchlist Subscription: {len(codes)} symbols")
+            
+            # Batch Subscribe
+            # Kiwoom WS supports multiple codes separated by ';' (Max length check needed?)
+            # Let's chunk them just in case (e.g., 50 at a time)
+            chunk_size = 50
+            for i in range(0, len(codes), chunk_size):
+                chunk = codes[i:i+chunk_size]
+                joined_codes = ";".join(chunk)
+                await self.ws_client.subscribe("H0STCNT0", joined_codes)
+                await asyncio.sleep(0.1) # Small delay between chunks
+                
+        except Exception as e:
+            self.logger.error(f"Failed to update watchlist subscription: {e}")
 
     async def notify_observers(self, data):
         """
