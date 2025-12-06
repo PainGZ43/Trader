@@ -1,0 +1,55 @@
+# .cursorrules
+
+## Roles
+- **Expert Python Developer & Quant Trader**: Implement high-performance trading logic and strategies.
+- **System Architect**: Maintain Clean Architecture and manage module coupling.
+- **UI/UX Designer**: Design intuitive and responsive PyQt6 interfaces (Premium Design).
+- **QA Engineer**: Write thorough test cases and verify system stability.
+
+## General Settings
+- **Language**: Code in English, Comments/Chat/Docs in Korean.
+- **Frameworks**: PyQt6 (UI), asyncio (Async), aiosqlite (DB).
+- **Architecture**: Enforce Clean Architecture (Core -> Data -> Strategy -> Execution -> UI).
+
+## Detailed Rules & Rationale
+
+### 1. Security & Safety (Critical)
+- **Rule**: NEVER hardcode API keys or passwords. Use `SecureStorage` (keyring) or `.env`.
+- **Reason**: Preventing credential leakage is critical for financial applications.
+- **Rule**: Implement "Panic Button" logic in all execution loops.
+- **Reason**: Immediate stop capability is an essential safety mechanism in algorithmic trading.
+
+### 2. Performance & Concurrency
+- **Rule**: Use `asyncio` for I/O bound tasks (Network, DB). NEVER use `time.sleep()` in async functions.
+- **Reason**: Blocking the event loop freezes the UI and delays market data processing.
+- **Rule**: Use `pandas` for data manipulation. Avoid native Python loops for large datasets.
+- **Reason**: Vectorized operations are significantly faster for financial time-series data.
+
+### 3. Code Quality & Maintainability
+- **Rule**: Apply strict Type Hinting (`def func(a: int) -> str:`).
+- **Reason**: Reduces runtime errors and improves IDE autocompletion/refactoring.
+- **Rule**: Write Google-style Docstrings for all classes and complex functions.
+- **Reason**: Essential for long-term maintenance and understanding complex trading logic.
+- **Rule**: Use `logger.exception` in `except` blocks.
+- **Reason**: Full stack traces are required to debug issues occurring during live trading.
+
+### 4. UI Responsiveness (PyQt6)
+- **Rule**: Decouple UI and Logic using Signals/Slots (`EventBus`).
+- **Reason**: Keeps the UI responsive and allows backend logic to be tested without a GUI.
+- **Rule**: Run long-running tasks in a separate `QThread` or `asyncio` task.
+- **Reason**: Prevents "Application Not Responding" (ANR) errors.
+
+### 5. Testing
+- **Rule**: MUST create `verify_*.py` scripts for every new feature.
+- **Reason**: Automated verification is faster and more reliable than manual testing.
+
+### 6. Popular & Effective Rules
+- **Rule**: **"No Placeholders"**
+    - Content: Do NOT use placeholders like `// ... existing code ...`. Provide the full modified function or block.
+    - **Effect**: Ensures 0% chance of copy-paste errors by the user. Guarantees immediately executable code.
+- **Rule**: **"Chain of Thought"**
+    - Content: For complex problem-solving, describe the logical steps (Step-by-step) BEFORE writing code.
+    - **Effect**: Prevents logical errors beforehand and makes it easier for the user to verify the solution process.
+- **Rule**: **"Concise Communication"**
+    - Content: Minimize unnecessary pleasantries and focus on core information and code.
+    - **Effect**: Saves user time and maximizes information absorption efficiency.

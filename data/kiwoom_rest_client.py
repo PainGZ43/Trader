@@ -54,6 +54,10 @@ class KiwoomRestClient:
         """
         Issue Access Token using KeyManager's active key.
         """
+        # Global Cooldown Check
+        if hasattr(self, '_token_cooldown_until') and datetime.now() < self._token_cooldown_until:
+            self.logger.warning(f"Token issuance is on cooldown until {self._token_cooldown_until.strftime('%H:%M:%S')}")
+            return None
         # Check if current token is valid
         if self.access_token and self.token_expiry:
             now = datetime.now()
@@ -63,7 +67,30 @@ class KiwoomRestClient:
 
         # Lazy import to avoid circular dependency if any
         from data.key_manager import key_manager
+        from core.secure_storage import secure_storage
         
+        # 1. Check Memory Cache
+        if self.access_token and self.token_expiry:
+            now = datetime.now()
+            if isinstance(self.token_expiry, datetime):
+                if now < self.token_expiry - timedelta(minutes=1): # Buffer
+                    return self.access_token
+
+        # 2. Check Persistent Storage
+        stored_token = secure_storage.get("kiwoom_access_token")
+        stored_expiry = secure_storage.get("kiwoom_token_expiry")
+        
+        if stored_token and stored_expiry:
+            try:
+                expiry_dt = datetime.fromisoformat(stored_expiry)
+                if datetime.now() < expiry_dt - timedelta(minutes=1):
+                    self.access_token = stored_token
+                    self.token_expiry = expiry_dt
+                    self.logger.info(f"Restored valid token from storage. Expires: {expiry_dt}")
+                    return self.access_token
+            except:
+                pass # Invalid format, ignore
+
         active_key = key_manager.get_active_key()
         if not active_key:
             self.logger.error("No active API key found. Please register a key in Settings.")
@@ -118,12 +145,23 @@ class KiwoomRestClient:
                             except:
                                 self.token_expiry = datetime.now() + timedelta(hours=6) # Default fallback
                         
+                        # Save to Persistent Storage
+                        secure_storage.save("kiwoom_access_token", self.access_token)
+                        secure_storage.save("kiwoom_token_expiry", self.token_expiry.isoformat())
+
                         self.logger.info(f"Token issued successfully. Expires: {self.token_expiry}")
                         return self.access_token
                     else:
                         msg = result.get("return_msg") or result.get("error_description") or "Unknown Error"
                         code = result.get("return_code") or result.get("error")
                         self.logger.error(f"Token issuance failed: {msg} (Code: {code})")
+                        
+                        # Set Cooldown if 429 or specific error code
+                        # Code 5 often means "Limit Exceeded" in Kiwoom
+                        if str(code) == "5" or "초과" in msg:
+                            self._token_cooldown_until = datetime.now() + timedelta(minutes=10)
+                            self.logger.warning(f"Rate Limit Hit. Cooldown set until {self._token_cooldown_until.strftime('%H:%M:%S')}")
+                        
                         return None
                 else:
                     error_text = await response.text()
@@ -255,25 +293,58 @@ class KiwoomRestClient:
     async def get_ohlcv(self, symbol, interval, start_date=None):
         """
         Get Historical Data (OHLCV).
-        interval: "day" (opt10081) or "minute" (opt10080)
+        interval: "day" (ka10081)
         """
         if interval == "day":
-            endpoint = "/api/dostk/ohlcv_day" # Hypothetical endpoint for bridge
-            tr_id = "opt10081"
-        elif interval == "minute":
-            endpoint = "/api/dostk/ohlcv_minute"
-            tr_id = "opt10080"
+            endpoint = "/api/dostk/chart"
+            tr_id = "ka10081"
         else:
-            self.logger.error(f"Invalid interval: {interval}")
-            return None
-            
+            # Fallback or other intervals not fully supported yet
+            endpoint = "/api/dostk/chart" 
+            tr_id = "ka10081"
+
+        # Params for ka10081
+        base_dt = datetime.now().strftime("%Y%m%d")
+        
         data = {
             "stk_cd": symbol,
-            "date": start_date, # YYYYMMDD
-            "tick": "1" if interval == "minute" else None
+            "base_dt": base_dt,
+            "upd_stkpc_tp": "1" # Day
         }
         
-        return await self.request("POST", endpoint, data=data, api_id=tr_id)
+        resp = await self.request("POST", endpoint, data=data, api_id=tr_id)
+        
+        if not resp:
+            return None
+            
+        # Parse Response (ka10081)
+        # Response: {"stk_dt_pole_chart_qry": [{"dt":..., "open_pric":...}, ...]}
+        output = []
+        items = resp.get("stk_dt_pole_chart_qry", [])
+        
+        for item in items:
+            try:
+                d = item["dt"]
+                # Prices might have signs (+/-)
+                o = abs(int(item["open_pric"]))
+                h = abs(int(item["high_pric"]))
+                l = abs(int(item["low_pric"]))
+                c = abs(int(item["cur_prc"]))
+                v = int(item["trde_qty"])
+                
+                output.append({
+                    "date": d,
+                    "open": o,
+                    "high": h,
+                    "low": l,
+                    "close": c,
+                    "volume": v
+                })
+            except Exception as e:
+                self.logger.error(f"Error parsing item: {item} - {e}")
+                
+        # Return in format expected by BacktestDialog (resp["output"])
+        return {"output": output, "rt_cd": resp.get("return_code", resp.get("rt_cd"))}
 
     async def get_code_list(self, market_type="0"):
         """

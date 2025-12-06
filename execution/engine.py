@@ -50,6 +50,10 @@ class ExecutionEngine:
         # Strategies
         self.strategies: Dict[str, Any] = {}
 
+        # Initialize Strategy State DAO
+        from strategy.persistence import StrategyStateDAO
+        self.strategy_dao = StrategyStateDAO()
+
         # Initialize Scheduler
         from execution.scheduler import Scheduler
         self.scheduler = Scheduler()
@@ -59,6 +63,17 @@ class ExecutionEngine:
         """Register a strategy instance."""
         self.strategies[strategy.strategy_id] = strategy
         self.logger.info(f"Registered Strategy: {strategy.strategy_id}")
+
+    async def restore_strategies_state(self):
+        """Restore state for all registered strategies."""
+        for strategy_id, strategy in self.strategies.items():
+            try:
+                state = await self.strategy_dao.load_state(strategy_id)
+                if state:
+                    strategy.set_state(state)
+                    self.logger.info(f"Restored state for {strategy_id}: {state}")
+            except Exception as e:
+                self.logger.error(f"Failed to restore state for {strategy_id}: {e}")
 
     async def on_realtime_data(self, data: Dict[str, Any]):
         """
@@ -203,6 +218,40 @@ class ExecutionEngine:
 
         # Start background tasks
         asyncio.create_task(self.order_manager.monitor_unfilled_orders())
+        
+        # Subscribe to Order Events for Strategy State Update
+        from core.event_bus import event_bus
+        event_bus.subscribe("order.filled", self._on_order_filled)
+        
+        # Restore Strategy States
+        await self.restore_strategies_state()
+
+    def _on_order_filled(self, event):
+        """
+        Handle order filled event to update strategy state.
+        Event data: {order_id, symbol, type, price, qty, strategy_id, ...}
+        """
+        data = event.data
+        strategy_id = data.get("strategy_id")
+        
+        if not strategy_id or strategy_id not in self.strategies:
+            return
+            
+        strategy = self.strategies[strategy_id]
+        
+        # Update Strategy Position
+        # Assuming strategy.update_position takes (price, qty, type)
+        # Type: BUY or SELL
+        try:
+            strategy.update_position(data["price"], data["qty"], data["type"])
+            
+            # Persist State
+            state = strategy.get_state()
+            asyncio.create_task(self.strategy_dao.save_state(state))
+            self.logger.info(f"Updated and saved state for {strategy_id}")
+            
+        except Exception as e:
+            self.logger.error(f"Error updating strategy state: {e}")
 
     async def execute_signal(self, signal: Signal, quantity: int):
         """
@@ -237,7 +286,10 @@ class ExecutionEngine:
             return
  
         # 3. Send Order
-        order_id = await self.order_manager.send_order(signal, quantity, self.account_num)
+        # Pass strategy_id to OrderManager so it can be returned in events
+        extra_data = {"strategy_id": signal.strategy_id} if hasattr(signal, "strategy_id") else {}
+        
+        order_id = await self.order_manager.send_order(signal, quantity, self.account_num, extra_data=extra_data)
         
         if order_id:
             self.risk_manager.record_order()

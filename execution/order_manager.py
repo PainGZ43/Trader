@@ -6,6 +6,7 @@ from strategy.base_strategy import Signal
 from data.kiwoom_rest_client import KiwoomRestClient
 from core.logger import get_logger
 from core.database import db
+from core.event_bus import event_bus
 
 class OrderManager:
     """
@@ -32,16 +33,32 @@ class OrderManager:
                 filled_qty INTEGER,
                 price REAL,
                 source TEXT,
-                timestamp DATETIME
+                timestamp DATETIME,
+                strategy_id TEXT
             )
         """)
+        
+        # Migration: Add strategy_id column if not exists
+        try:
+            # Check if column exists
+            columns = await db.fetch_all("PRAGMA table_info(active_orders)")
+            has_strategy_id = any(col['name'] == 'strategy_id' for col in columns)
+            
+            if not has_strategy_id:
+                await db.execute("ALTER TABLE active_orders ADD COLUMN strategy_id TEXT")
+                self.logger.info("Migrated active_orders table: Added strategy_id column")
+        except Exception as e:
+            self.logger.error(f"Migration failed: {e}")
+            
         await self.load_active_orders()
 
     async def load_active_orders(self):
         """Load active orders from DB."""
+        # Check columns to handle legacy schema if needed, but we did migration above.
+        # We need to select all columns.
         rows = await db.fetch_all("SELECT * FROM active_orders")
         for row in rows:
-            # row: order_id, symbol, type, quantity, filled_qty, price, source, timestamp
+            # row: order_id, symbol, type, quantity, filled_qty, price, source, timestamp, strategy_id
             order_id = row[0]
             self.active_orders[order_id] = {
                 'symbol': row[1],
@@ -50,7 +67,8 @@ class OrderManager:
                 'filled_qty': row[4],
                 'price': row[5],
                 'source': row[6],
-                'timestamp': row[7] # Assuming sqlite adapter returns datetime or string
+                'timestamp': row[7],
+                'strategy_id': row[8] if len(row) > 8 else None
             }
         self.logger.info(f"Loaded {len(self.active_orders)} active orders from DB.")
 
@@ -58,19 +76,20 @@ class OrderManager:
         """Save order to DB."""
         query = """
             INSERT OR REPLACE INTO active_orders 
-            (order_id, symbol, type, quantity, filled_qty, price, source, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (order_id, symbol, type, quantity, filled_qty, price, source, timestamp, strategy_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         await db.execute(query, (
             order_id, info['symbol'], info['type'], info['quantity'], 
-            info['filled_qty'], info['price'], info['source'], info['timestamp']
+            info['filled_qty'], info['price'], info['source'], info['timestamp'],
+            info.get('strategy_id')
         ))
 
     async def remove_order(self, order_id: str):
         """Remove order from DB."""
         await db.execute("DELETE FROM active_orders WHERE order_id = ?", (order_id,))
 
-    async def send_order(self, signal: Signal, quantity: int, account_num: str) -> Optional[str]:
+    async def send_order(self, signal: Signal, quantity: int, account_num: str, extra_data: Dict[str, Any] = None) -> Optional[str]:
         """
         Send order to Kiwoom.
         """
@@ -100,7 +119,8 @@ class OrderManager:
                         'filled_qty': 0,
                         'price': price,
                         'source': 'STRATEGY',
-                        'timestamp': datetime.now()
+                        'timestamp': datetime.now(),
+                        'strategy_id': extra_data.get('strategy_id') if extra_data else None
                     }
                     self.active_orders[order_no] = order_info
                     await self.save_order(order_no, order_info)
@@ -141,7 +161,8 @@ class OrderManager:
                         'filled_qty': 0,
                         'price': price,
                         'source': 'MANUAL',
-                        'timestamp': datetime.now()
+                        'timestamp': datetime.now(),
+                        'strategy_id': None
                     }
                     self.active_orders[order_no] = order_info
                     await self.save_order(order_no, order_info)
@@ -217,6 +238,7 @@ class OrderManager:
             for oid in order_ids:
                 info = self.active_orders[oid]
                 await self.cancel_order(oid, info['symbol'])
+                await asyncio.sleep(0.5) # Prevent burst rate limit
             
     async def close_all_positions(self):
         """
@@ -249,6 +271,7 @@ class OrderManager:
                     # Send Market Sell Order
                     # trade_type=2 (Sell), quote_type=03 (Market)
                     await self.kiwoom.send_order(symbol, 2, qty, 0, "03")
+                    await asyncio.sleep(0.5) # Prevent burst rate limit
                     
         except Exception as e:
             self.logger.error(f"Panic Liquidation Failed: {e}")
@@ -274,7 +297,8 @@ class OrderManager:
                     'filled_qty': 0,
                     'price': float(event_data.get('price', 0)),
                     'source': 'UNKNOWN', # External order
-                    'timestamp': datetime.now()
+                    'timestamp': datetime.now(),
+                    'strategy_id': None
                 }
                 self.active_orders[order_no] = order_info
                 await self.save_order(order_no, order_info)
@@ -290,6 +314,16 @@ class OrderManager:
                  current_fill = int(event_data.get('qty', 0)) # Fallback
             
             order_info['filled_qty'] += current_fill
+            
+            # Emit Event for Strategy
+            event_bus.publish("order.filled", {
+                "order_id": order_no,
+                "symbol": order_info['symbol'],
+                "type": order_info['type'],
+                "price": order_info['price'],
+                "qty": current_fill,
+                "strategy_id": order_info.get('strategy_id')
+            })
             
             remaining = order_info['quantity'] - order_info['filled_qty']
             self.logger.info(f"Order {order_no} Partial Fill: {current_fill} (Rem: {remaining})")
@@ -347,9 +381,16 @@ class OrderManager:
                         except:
                             continue
                             
+                    # Check if we already tried to cancel recently
+                    last_cancel = info.get('last_cancel_attempt')
+                    if last_cancel and (now - last_cancel).total_seconds() < 10: # Wait 10s before retry
+                        continue
+
                     if (now - timestamp).total_seconds() > self.max_unfilled_time:
                         self.logger.warning(f"Order {order_id} is unfilled for too long. Cancelling...")
+                        info['last_cancel_attempt'] = now
                         await self.cancel_order(order_id, info['symbol'])
+                        await asyncio.sleep(0.5) # Prevent burst rate limit (429)
                         
             except asyncio.CancelledError:
                 self.logger.info("Stopped monitoring unfilled orders.")

@@ -115,17 +115,15 @@ class HeaderBar(QFrame):
     def _init_ui(self):
         # 1. Logo Area
         logo_icon = qta.icon('fa5s.robot', color='#007acc')
-        self.logo_btn = QPushButton()
-        self.logo_btn.setIcon(logo_icon)
-        self.logo_btn.setIconSize(qta.QtCore.QSize(24, 24))
-        self.logo_btn.setFlat(True)
-        self.logo_btn.setStyleSheet("border: none; background: transparent;")
+        self.logo_lbl = QLabel()
+        self.logo_lbl.setPixmap(logo_icon.pixmap(24, 24))
+        self.logo_lbl.setStyleSheet("border: none; background: transparent;")
         
         self.title_label = QLabel(language_manager.get_text("header_title"))
         self.title_label.setObjectName("LogoLabel")
         self.title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #0098ff;")
         
-        self.layout.addWidget(self.logo_btn)
+        self.layout.addWidget(self.logo_lbl)
         self.layout.addWidget(self.title_label)
         
         self.layout.addStretch(1)
@@ -171,17 +169,19 @@ class HeaderBar(QFrame):
         self.layout.addWidget(self.resource_label)
         
         # 4. Global Controls
+        from PyQt6.QtGui import QIcon
+        
         self.start_btn = QPushButton(language_manager.get_text("btn_start"))
-        self.start_btn.setIcon(qta.icon('fa5s.play', color='#4caf50'))
+        self.start_btn.setIcon(QIcon(qta.icon('fa5s.play', color='#4caf50').pixmap(16, 16)))
         
         self.stop_btn = QPushButton(language_manager.get_text("btn_stop"))
-        self.stop_btn.setIcon(qta.icon('fa5s.stop', color='#f44336'))
+        self.stop_btn.setIcon(QIcon(qta.icon('fa5s.stop', color='#f44336').pixmap(16, 16)))
         
         self.settings_btn = QPushButton()
-        self.settings_btn.setIcon(qta.icon('fa5s.cog', color='white'))
+        self.settings_btn.setIcon(QIcon(qta.icon('fa5s.cog', color='white').pixmap(16, 16)))
         
         self.btn_backtest = QPushButton("Backtest")
-        self.btn_backtest.setIcon(qta.icon('fa5s.flask', color='#f1c40f'))
+        self.btn_backtest.setIcon(QIcon(qta.icon('fa5s.flask', color='#f1c40f').pixmap(16, 16)))
         self.layout.addWidget(self.btn_backtest)
 
         self.layout.addWidget(self.start_btn)

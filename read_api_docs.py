@@ -7,23 +7,19 @@ try:
     xls = pd.ExcelFile(file_path)
     print(f"Sheets: {xls.sheet_names}")
     
-    keywords = ["kt00001", "kt00004", "kt00007", "kt00018"]
-    
-    for sheet_name in xls.sheet_names:
-        print(f"\n--- Sheet: {sheet_name} ---")
-        try:
-            df = pd.read_excel(xls, sheet_name=sheet_name)
-            # Convert to string for searching
-            df_str = df.astype(str)
+    target_sheet = None
+    for name in xls.sheet_names:
+        if "ka10086" in name:
+            target_sheet = name
+            break
             
-            for keyword in keywords:
-                mask = df_str.apply(lambda x: x.str.contains(keyword, case=False, na=False)).any(axis=1)
-                if mask.any():
-                    print(f"Found '{keyword}':")
-                    print(df[mask].to_string())
-                    
-        except Exception as e:
-            print(f"Error reading sheet {sheet_name}: {e}")
+    if target_sheet:
+        print(f"\n--- Reading Sheet: {target_sheet} ---")
+        df = pd.read_excel(xls, sheet_name=target_sheet)
+        # Print rows 40-60 where examples usually are
+        print(df.iloc[40:60].to_string())
+    else:
+        print("Sheet ka10086 not found.")
             
 except Exception as e:
     print(f"Error opening file: {e}")

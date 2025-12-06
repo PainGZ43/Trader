@@ -1,14 +1,35 @@
+
+# Python
 __pycache__/
 *.py[cod]
+*.csv
+*.xlsx
 *$py.class
+
+# Environments
 .venv/
 .env
+
+# IDEs
 .vscode/
 .idea/
+
+# Logic
 logs/
 data/*.db
 data/*.json
+data/*.html
+data/*.png
 !data/market_code.db
+trade.db*
+
+# Build
 build/
 dist/
 *.spec
+
+# Temp
+debug_output.txt
+test_output.txt
+verify_output.txt
+test_graph

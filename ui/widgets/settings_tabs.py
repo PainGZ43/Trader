@@ -21,18 +21,18 @@ class AccountSettingsTab(QWidget):
         # Key Management Table
         self.table = QTableWidget()
         self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["Active", "Owner", "Type", "Account No", "Expiry"])
+        self.table.setHorizontalHeaderLabels(["활성", "소유자", "유형", "계좌번호", "만료일"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         layout.addWidget(self.table)
         
         # Buttons
         btn_layout = QHBoxLayout()
-        self.btn_add = QPushButton("Add Key")
+        self.btn_add = QPushButton("키 추가")
         self.btn_add.clicked.connect(self.add_key_dialog)
-        self.btn_del = QPushButton("Delete Key")
+        self.btn_del = QPushButton("키 삭제")
         self.btn_del.clicked.connect(self.delete_key)
-        self.btn_refresh = QPushButton("Refresh")
+        self.btn_refresh = QPushButton("새로고침")
         self.btn_refresh.clicked.connect(self.load_keys)
         
         btn_layout.addWidget(self.btn_add)
@@ -41,7 +41,7 @@ class AccountSettingsTab(QWidget):
         layout.addLayout(btn_layout)
         
         # Auto Login Option
-        self.chk_auto_login = QCheckBox("Auto Login with Active Key on Startup")
+        self.chk_auto_login = QCheckBox("시작 시 활성 키로 자동 로그인")
         self.chk_auto_login.setChecked(key_manager.is_auto_login_enabled())
         self.chk_auto_login.toggled.connect(lambda c: key_manager.set_auto_login_enabled(c))
         layout.addWidget(self.chk_auto_login)
@@ -95,9 +95,13 @@ class AccountSettingsTab(QWidget):
         # Auto-login is saved on toggle, so nothing explicit here
         return False
 
+from strategy.registry import StrategyRegistry
+
 class StrategySettingsTab(QWidget):
     def __init__(self):
         super().__init__()
+        # Ensure registry is initialized
+        StrategyRegistry.initialize()
         self.init_ui()
 
     def init_ui(self):
@@ -106,23 +110,19 @@ class StrategySettingsTab(QWidget):
         # Strategy List
         self.strategy_list = QTableWidget()
         self.strategy_list.setColumnCount(1)
-        self.strategy_list.setHorizontalHeaderLabels(["Strategies"])
+        self.strategy_list.setHorizontalHeaderLabels(["전략 목록"])
         self.strategy_list.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        # Available Strategies
-        strategies = [
-            "HybridStrategy", 
-            "VolatilityBreakoutStrategy", 
-            "MovingAverageCrossoverStrategy", 
-            "RSIStrategy", 
-            "BollingerBandStrategy"
-        ]
+        
+        # Available Strategies from Registry
+        strategies = StrategyRegistry.get_all_strategies()
+        
         self.strategy_list.setRowCount(len(strategies))
         for i, name in enumerate(strategies):
             self.strategy_list.setItem(i, 0, QTableWidgetItem(name))
         layout.addWidget(self.strategy_list, 1)
         
         # Parameter Editor
-        self.param_group = QGroupBox("Parameters")
+        self.param_group = QGroupBox("파라미터 설정")
         self.param_layout = QFormLayout()
         self.param_group.setLayout(self.param_layout)
         layout.addWidget(self.param_group, 2)
@@ -140,8 +140,17 @@ class StrategySettingsTab(QWidget):
         self.param_widgets = {}
             
         strategy_name = item.text()
-        # Mock Schema Loading
-        schema = self.get_mock_schema(strategy_name)
+        
+        # Load Schema from Registry
+        schema = StrategyRegistry.get_strategy_schema(strategy_name)
+        description = StrategyRegistry.get_strategy_description(strategy_name)
+        
+        # Add Description Label
+        if description:
+            desc_label = QLabel(description)
+            desc_label.setWordWrap(True)
+            desc_label.setStyleSheet("color: gray; font-style: italic; margin-bottom: 10px;")
+            self.param_layout.addRow(desc_label)
         
         for key, meta in schema.items():
             label = QLabel(meta.get("desc", key))
@@ -155,9 +164,14 @@ class StrategySettingsTab(QWidget):
                 widget.setRange(meta.get("min", 0), meta.get("max", 100))
                 widget.setValue(int(current_val))
             elif meta["type"] == "float":
-                widget = QSpinBox() # Simplified
-                widget.setRange(0, 1000)
-                widget.setValue(int(current_val)) # Mock
+                widget = QSpinBox() # Using DoubleSpinBox for float
+                # QSpinBox is for int, need QDoubleSpinBox
+                from PyQt6.QtWidgets import QDoubleSpinBox
+                widget = QDoubleSpinBox()
+                widget.setRange(meta.get("min", 0.0), meta.get("max", 1000.0))
+                widget.setSingleStep(0.1)
+                widget.setDecimals(2)
+                widget.setValue(float(current_val))
             elif meta["type"] == "enum":
                 widget = QComboBox()
                 widget.addItems(meta.get("options", []))
@@ -166,14 +180,6 @@ class StrategySettingsTab(QWidget):
             if widget:
                 self.param_layout.addRow(label, widget)
                 self.param_widgets[key] = widget
-
-    def get_mock_schema(self, name):
-        if name == "HybridStrategy":
-            return {
-                "rsi_period": {"type": "int", "min": 5, "max": 30, "default": 14, "desc": "RSI Period"},
-                "ma_type": {"type": "enum", "options": ["SMA", "EMA"], "default": "SMA", "desc": "MA Type"}
-            }
-        return {}
 
     def save_settings(self):
         # Save parameters for currently selected strategy
@@ -186,6 +192,10 @@ class StrategySettingsTab(QWidget):
                     val = widget.value()
                 elif isinstance(widget, QComboBox):
                     val = widget.currentText()
+                # Handle QDoubleSpinBox
+                from PyQt6.QtWidgets import QDoubleSpinBox
+                if isinstance(widget, QDoubleSpinBox):
+                    val = widget.value()
                 
                 if val is not None:
                     config.set(f"strategy.{strategy_name}.{key}", val)
@@ -200,26 +210,26 @@ class RiskSettingsTab(QWidget):
         layout = QVBoxLayout(self)
         
         # Risk Parameters Group
-        risk_group = QGroupBox("Risk Management")
+        risk_group = QGroupBox("리스크 관리")
         risk_layout = QFormLayout()
         
         self.max_loss = QSpinBox()
         self.max_loss.setRange(0, 100)
         self.max_loss.setSuffix("%")
         self.max_loss.setValue(int(config.get("risk.max_loss_pct", 3)))
-        risk_layout.addRow("Max Daily Loss:", self.max_loss)
+        risk_layout.addRow("일일 최대 손실률:", self.max_loss)
         
         self.max_pos = QSpinBox()
         self.max_pos.setRange(0, 100)
         self.max_pos.setSuffix("%")
         self.max_pos.setValue(int(config.get("risk.max_position_pct", 10)))
-        risk_layout.addRow("Max Position Size:", self.max_pos)
+        risk_layout.addRow("최대 포지션 크기:", self.max_pos)
         
         risk_group.setLayout(risk_layout)
         layout.addWidget(risk_group)
         
         # Kakao Notification Group
-        kakao_group = QGroupBox("KakaoTalk Notification")
+        kakao_group = QGroupBox("카카오톡 알림")
         kakao_layout = QFormLayout()
         
         # 1. REST API Key
@@ -227,18 +237,18 @@ class RiskSettingsTab(QWidget):
         self.kakao_app_key.setEchoMode(QLineEdit.EchoMode.Password)
         app_key = secure_storage.get("kakao_app_key") or config.get("KAKAO_APP_KEY", "")
         self.kakao_app_key.setText(app_key)
-        kakao_layout.addRow("REST API Key:", self.kakao_app_key)
+        kakao_layout.addRow("REST API 키:", self.kakao_app_key)
         
         # 2. Auth Code Flow
-        btn_guide = QPushButton("1. Login & Get Code")
+        btn_guide = QPushButton("1. 로그인 및 코드 발급")
         btn_guide.clicked.connect(self.open_kakao_login)
         kakao_layout.addRow("", btn_guide)
         
         self.auth_code = QLineEdit()
-        self.auth_code.setPlaceholderText("Paste the code from the redirect URL here")
-        kakao_layout.addRow("Auth Code:", self.auth_code)
+        self.auth_code.setPlaceholderText("리다이렉트 URL의 코드를 여기에 붙여넣으세요")
+        kakao_layout.addRow("인증 코드:", self.auth_code)
         
-        btn_exchange = QPushButton("2. Generate Tokens")
+        btn_exchange = QPushButton("2. 토큰 생성")
         btn_exchange.clicked.connect(self.exchange_token)
         kakao_layout.addRow("", btn_exchange)
         
@@ -248,17 +258,17 @@ class RiskSettingsTab(QWidget):
         self.access_token.setReadOnly(False) # Allow manual paste if needed
         acc_token = secure_storage.get("kakao_access_token") or config.get("KAKAO_ACCESS_TOKEN", "")
         self.access_token.setText(acc_token)
-        kakao_layout.addRow("Access Token:", self.access_token)
+        kakao_layout.addRow("액세스 토큰:", self.access_token)
         
         self.refresh_token = QLineEdit()
         self.refresh_token.setEchoMode(QLineEdit.EchoMode.Password)
         self.refresh_token.setReadOnly(False)
         ref_token = secure_storage.get("kakao_refresh_token") or config.get("KAKAO_REFRESH_TOKEN", "")
         self.refresh_token.setText(ref_token)
-        kakao_layout.addRow("Refresh Token:", self.refresh_token)
+        kakao_layout.addRow("리프레시 토큰:", self.refresh_token)
         
         # 4. Test
-        self.btn_test_msg = QPushButton("Send Test Message")
+        self.btn_test_msg = QPushButton("테스트 메시지 전송")
         self.btn_test_msg.clicked.connect(self.send_test_message)
         kakao_layout.addRow("", self.btn_test_msg)
         
@@ -381,13 +391,13 @@ class SystemSettingsTab(QWidget):
         self.db_path = QLabel("trade.db (15 MB)")
         layout.addRow("Database:", self.db_path)
         
-        self.btn_vacuum = QPushButton("Optimize DB (Vacuum)")
+        self.btn_vacuum = QPushButton("DB 최적화 (Vacuum)")
         layout.addRow("", self.btn_vacuum)
         
         layout.addRow(QLabel(""))
-        self.btn_reset = QPushButton("Factory Reset")
+        self.btn_reset = QPushButton("공장 초기화")
         self.btn_reset.setStyleSheet("background-color: #c0392b; color: white;")
-        layout.addRow("Danger Zone:", self.btn_reset)
+        layout.addRow("위험 구역:", self.btn_reset)
 
     def save_settings(self):
         """Save system settings."""

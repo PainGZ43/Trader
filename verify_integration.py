@@ -39,7 +39,7 @@ def verify_integration():
         event_bus.subscribe("order.create", on_order_create)
         
         print("[TEST] Simulating 'BUY' click in OrderPanel...")
-        window.order_panel.code_input.setText("005930")
+        window.order_panel.code_input.setCurrentText("005930")
         window.order_panel.qty_input.setValue(10)
         window.order_panel.price_input.setValue(70000)
         window.order_panel.btn_buy.click()

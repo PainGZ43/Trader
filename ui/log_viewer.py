@@ -60,9 +60,21 @@ class LogViewer(QWidget):
 
         # Filter Bar
         filter_layout = QHBoxLayout()
+        
         self.level_combo = QComboBox()
         self.level_combo.addItems(["ALL", "INFO", "WARNING", "ERROR"])
         self.level_combo.currentTextChanged.connect(self.filter_logs)
+        filter_layout.addWidget(QLabel("Level:"))
+        filter_layout.addWidget(self.level_combo)
+        
+        self.chk_auto_scroll = QCheckBox("Auto Scroll")
+        self.chk_auto_scroll.setChecked(True)
+        self.chk_auto_scroll.setStyleSheet("color: #dcdcdc;")
+        filter_layout.addWidget(self.chk_auto_scroll)
+        
+        filter_layout.addStretch()
+        
+        layout.addLayout(filter_layout)
 
         # Log Text Area
         self.text_edit = QPlainTextEdit()

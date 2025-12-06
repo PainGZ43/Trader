@@ -15,6 +15,13 @@ def main():
     from core.exception_handler import exception_handler
     sys.excepthook = exception_handler.handle_exception
 
+    # Pre-import QtWebEngineWidgets to avoid "must be imported before QCoreApplication" error
+    # This is required because we lazy-load BacktestDialog which uses WebEngine
+    try:
+        from PyQt6.QtWebEngineWidgets import QWebEngineView
+    except ImportError:
+        pass
+
     # Create Qt Application
     app = QApplication(sys.argv)
     
@@ -30,6 +37,17 @@ def main():
     
     # Start Data Collector
     loop.create_task(data_collector.start())
+
+    # Initialize Execution Engine
+    from data.kiwoom_rest_client import kiwoom_client
+    from execution.engine import ExecutionEngine
+    from core.config import config
+    
+    # Determine Mode (PAPER vs REAL) - Default to REAL (which includes Kiwoom Mock Server)
+    # If we want internal Paper Trading, we would set this to PAPER.
+    # For now, we assume Kiwoom (Real/Mock) usage.
+    exec_engine = ExecutionEngine(kiwoom_client, mode="REAL", config=config._config)
+    loop.create_task(exec_engine.initialize())
 
     # Run Event Loop
     with loop:

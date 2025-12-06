@@ -99,6 +99,7 @@ class BaseStrategy(StrategyInterface):
     Base Strategy Implementation with common functionality.
     """
     @classmethod
+    @abstractmethod
     def get_parameter_schema(cls) -> Dict[str, Dict[str, Any]]:
         """
         Define tunable parameters for the strategy.
@@ -110,6 +111,16 @@ class BaseStrategy(StrategyInterface):
         }
         """
         return {}
+
+    @classmethod
+    def get_name(cls) -> str:
+        """Return strategy name."""
+        return cls.__name__
+
+    @classmethod
+    def get_description(cls) -> str:
+        """Return strategy description."""
+        return cls.__doc__.strip() if cls.__doc__ else "No description available."
 
     def __init__(self, strategy_id: str, symbol: str):
         self.logger = get_logger(f"Strategy_{strategy_id}")
@@ -173,19 +184,19 @@ class BaseStrategy(StrategyInterface):
         
         return None
 
-    def update_position(self, size: int, price: float):
+    def update_position(self, price: float, qty: int, order_type: str):
         """
         Update position state after execution.
         """
-        if size > 0: # Buy
-            total_cost = (self.state.current_position * self.state.avg_entry_price) + (size * price)
-            self.state.current_position += size
+        if order_type == "BUY":
+            total_cost = (self.state.current_position * self.state.avg_entry_price) + (qty * price)
+            self.state.current_position += qty
             self.state.avg_entry_price = total_cost / self.state.current_position if self.state.current_position != 0 else 0
-        elif size < 0: # Sell
+        elif order_type == "SELL":
             # Calculate Profit
-            profit = (price - self.state.avg_entry_price) * abs(size)
+            profit = (price - self.state.avg_entry_price) * qty
             self.state.accumulated_profit += profit
-            self.state.current_position += size
+            self.state.current_position -= qty
             if self.state.current_position == 0:
                 self.state.avg_entry_price = 0
         
